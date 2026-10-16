@@ -18,3 +18,9 @@ test("access token only comes from dedicated session cookie", () => {
   assert.equal(extractAccessToken({ authorization: "Bearer opaque" }), null);
   assert.equal(extractAccessToken({ cookie: "other=opaque" }), null);
 });
+
+test("signed tenant contexts cannot outlive the maximum allowed session duration", () => {
+  assert.throws(() => signTenantSelection(user, tenant, Date.now() + 7200000, key), /Invalid tenant selection/);
+  const valid = signTenantSelection(user, tenant, Date.now() + 60000, key);
+  assert.equal(verifyTenantSelection("sd-tenant-selection=" + valid, user, key), tenant);
+});
