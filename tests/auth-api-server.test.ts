@@ -142,3 +142,31 @@ test("HTTP login, refresh rotation, authenticated session and logout share one o
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });
+
+test("invalid signed tenant context cannot consume a one-time Supabase refresh token", async () => {
+  const { signTenantSelection } = await import("../src/authentication/session-cookies");
+  let requests = 0;
+  const server = createAuthApiServer({
+    supabaseUrl: "https://example.supabase.co", anonKey: "anon", secretKey: "sb_secret_test",
+    tenantSigningKey: "k".repeat(48), publicOrigin: "https://desk.example.test"
+  }, async () => { requests++; throw Error("provider must not be called"); });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const base = "http://127.0.0.1:" + address.port;
+    const csrf = await fetch(base + "/api/auth/csrf");
+    const { csrfToken } = await csrf.json() as { csrfToken: string };
+    const valid = signTenantSelection(userId, tenantId, Date.now() + 60000, "k".repeat(48));
+    const tampered = valid.slice(0, -1) + (valid.endsWith("0") ? "1" : "0");
+    for (const selection of [tampered, "invalid", valid.replace(userId, "33333333-3333-4333-8333-333333333333")]) {
+      const response = await fetch(base + "/api/auth/refresh", { method: "POST",
+        headers: { Origin: "https://desk.example.test", "x-csrf-token": csrfToken,
+          Cookie: "sd-csrf=" + csrfToken + "; sd-refresh-token=mock-refresh-only; sd-tenant-selection=" + selection } });
+      assert.equal(response.status, 401);
+    }
+    assert.equal(requests, 0);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
