@@ -45,6 +45,16 @@ test("integrated HTTP auth API boots CSRF and validates tenant selection", async
     });
     assert.equal(login.status, 200);
     assert.match(login.headers.get("set-cookie") ?? "", /sd-access-token=/);
+    const rotated = await fetch(base + "/api/auth/refresh", {
+      method: "POST", headers: { Origin: "https://desk.example.test",
+        Cookie: "sd-csrf=" + token, "x-csrf-token": token }
+    });
+    assert.equal(rotated.status, 401);
+    assert.match(rotated.headers.get("set-cookie") ?? "", /sd-access-token=/);
+    const rejectedRefresh = await fetch(base + "/api/auth/refresh", {
+      method: "POST", headers: { Origin: "https://attacker.example.test" }
+    });
+    assert.equal(rejectedRefresh.status, 403);
     const invalidLogin = await fetch(base + "/api/auth/login", {
       method: "POST", headers: { Origin: "https://desk.example.test" },
       body: JSON.stringify({ email: "agent@example.test", password: "example-password", tenantId })
