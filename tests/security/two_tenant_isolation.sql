@@ -232,4 +232,34 @@ begin
 end $$;
 reset role;
 
+-- Internal SECURITY DEFINER functions are never public/browser RPC endpoints.
+do $$
+declare routine text;
+begin
+ foreach routine in array array[
+  'public.provision_data_governance_settings()',
+  'public.validate_knowledge_collection_scope()',
+  'public.snapshot_knowledge_article_version()',
+  'public.validate_knowledge_ticket_article_scope()',
+  'public.provision_ticket_statuses(uuid)',
+  'public.provision_ticket_statuses_for_tenant()',
+  'public.validate_ticket_scope()',
+  'public.assign_ticket_protocol_and_validate_state()',
+  'public.validate_ticket_status_transition()',
+  'public.record_ticket_history()',
+  'public.validate_ticket_child_scope()',
+  'public.validate_ticket_relationship_scope()',
+  'public.validate_ticket_attachment_scope()',
+  'public.validate_contract_sla_scope()'
+ ] loop
+  if to_regprocedure(routine) is null then
+   raise exception 'Missing privileged function %',routine;
+  end if;
+  if has_function_privilege('anon',routine,'EXECUTE')
+     or has_function_privilege('authenticated',routine,'EXECUTE') then
+   raise exception 'Unexpected browser EXECUTE on privileged function %',routine;
+  end if;
+ end loop;
+end $$;
+
 select 'TWO_TENANT_RLS_FK_PASS' as result;

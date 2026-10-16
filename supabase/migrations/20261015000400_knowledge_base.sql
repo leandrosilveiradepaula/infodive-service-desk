@@ -388,3 +388,8 @@ create policy knowledge_article_ratings_update_own on public.knowledge_article_r
   with check (user_id = auth.uid() and public.can_read_knowledge_article(article_id));
 create policy knowledge_article_ratings_delete_own on public.knowledge_article_ratings for delete
   using (user_id = auth.uid());
+
+-- Privileged trigger/provisioning implementations are internal, not browser RPC.
+revoke all on function public.validate_knowledge_collection_scope() from public, anon, authenticated;
+revoke all on function public.snapshot_knowledge_article_version() from public, anon, authenticated;
+revoke all on function public.validate_knowledge_ticket_article_scope() from public, anon, authenticated;

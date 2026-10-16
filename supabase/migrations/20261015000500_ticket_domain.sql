@@ -469,3 +469,14 @@ create policy ticket_relationships_delete on public.ticket_relationships for del
 create policy ticket_attachments_read on public.ticket_attachments for select using (public.can_read_ticket(ticket_id) and (visibility = 'public' or public.can_manage_ticket(ticket_id)));
 create policy ticket_attachments_insert on public.ticket_attachments for insert with check (attached_by_user_id = auth.uid() and public.can_manage_ticket(ticket_id));
 create policy ticket_attachments_delete on public.ticket_attachments for delete using (public.can_manage_ticket(ticket_id));
+
+-- Privileged trigger/provisioning implementations are internal, not browser RPC.
+revoke all on function public.provision_ticket_statuses(uuid) from public, anon, authenticated;
+revoke all on function public.provision_ticket_statuses_for_tenant() from public, anon, authenticated;
+revoke all on function public.validate_ticket_scope() from public, anon, authenticated;
+revoke all on function public.assign_ticket_protocol_and_validate_state() from public, anon, authenticated;
+revoke all on function public.validate_ticket_status_transition() from public, anon, authenticated;
+revoke all on function public.record_ticket_history() from public, anon, authenticated;
+revoke all on function public.validate_ticket_child_scope() from public, anon, authenticated;
+revoke all on function public.validate_ticket_relationship_scope() from public, anon, authenticated;
+revoke all on function public.validate_ticket_attachment_scope() from public, anon, authenticated;
