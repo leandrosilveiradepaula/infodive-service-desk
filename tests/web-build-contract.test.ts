@@ -15,8 +15,11 @@ test("CI compiles TSX and exercises real build rather than reporting an empty qu
   assert.match(packageInfo.scripts["build:web"], /verify-web-build/);
 });
 
-test("preview is fail-closed until the real session provider is implemented", () => {
-  assert.match(entry, /AuthenticationProvider profile=\{null\}/);
+test("preview fetches server-verified session and denies access without it", () => {
+  assert.match(entry, /loadVerifiedSession/);
+  assert.match(entry, /useState<AuthenticatedProfile \| null>\(null\)/);
+  assert.match(entry, /profile === null/);
+  assert.doesNotMatch(entry, /profile=\{\{.*userId/);
   assert.doesNotMatch(entry, /service_role|SUPABASE_SERVICE_ROLE_KEY|sb_secret_/i);
 });
 
