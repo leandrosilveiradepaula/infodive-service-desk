@@ -34,3 +34,7 @@ O gate humano de merge e release de produção continua obrigatório.
 - Contract services, SLA rule calendars, SLA targets/activities e consumo de horas conferem todos os IDs vinculados sob a mesma identidade do tenant, também para operações privilegiadas.
 - `delegated_access_audit_log` não aceita mais INSERT de clientes autenticados: ações privilegiadas geram registros server-side; usuários não podem forjar eventos usando um grant existente.
 - O QA PostgreSQL real deve provar allow/deny para dois tenants; testes textuais e builds não encerram o gate de segurança. Nenhuma alteração foi aplicada em produção.
+
+## Integração com o build web — 16/10/2026
+
+Esta branch também incorpora o commit já validado da PR #3 (`236fab6a9b10487b1634eaf104e9d253166529a7`), sem merge de produção. Assim, o SHA da PR #5 será verificado no runner da Factory com `npm ci`, TypeScript/React/TSX, testes Node, build Vite e PostgreSQL descartável. Os testes SQL continuam fail-closed; não considerar Preview ou release aprovados apenas por CI verde. A PR #3 permanece aberta e deve ser reconciliada após decisão humana de integração, para evitar releases duplicados.
