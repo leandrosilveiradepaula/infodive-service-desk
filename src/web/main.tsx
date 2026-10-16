@@ -119,11 +119,17 @@ function Application() {
     const timer = window.setInterval(() => { void renew(); }, 25 * 60 * 1000);
     return () => { active = false; window.clearInterval(timer); };
   }, [profile]);
+  if (loading) return <main><p>Verificando sessão...</p></main>;
+  if (profile === null) return <main className="loginPage">
+    <LoginForm onAuthenticated={() => { setLoading(true); setRevision(value => value + 1); }} />
+  </main>;
   return <AuthenticationProvider profile={profile}>
-    <AppShell pageTitle="Início" currentPath="/">
-      {loading ? <p>Verificando sessão...</p> :
-       profile === null ? <LoginForm onAuthenticated={() => { setLoading(true); setRevision(value => value + 1); }} /> :
-       <><p>Identidade verificada. As permissões continuam sendo aplicadas pelo servidor.</p><LogoutButton onLogout={() => { setProfile(null); setRevision(value => value + 1); }} /></>}
+    <AppShell pageTitle="Central de atendimento" currentPath="/">
+      <section><h2>Bem-vindo ao Service Desk</h2>
+        <p>Olá, {profile.displayName}. Sua identidade foi verificada para {profile.tenantName}.</p>
+        <p>Os módulos operacionais dependem da conexão segura ao banco de chamados.</p>
+        <LogoutButton onLogout={() => { setProfile(null); setRevision(value => value + 1); }} />
+      </section>
     </AppShell>
   </AuthenticationProvider>;
 }
