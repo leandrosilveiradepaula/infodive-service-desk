@@ -1,7 +1,6 @@
 import type { SessionDependencies, ServerIdentity, TenantMembership } from "./server-session";
 
 export interface VerifiedIdentityProvider {
-  /** Must call the identity provider to validate a real server-side session. */
   verifySession(headers: Readonly<Record<string, string | undefined>>): Promise<ServerIdentity | null>;
 }
 export interface MembershipRecord {
@@ -16,11 +15,8 @@ export interface MembershipRepository {
   findByUserId(userId: string): Promise<readonly MembershipRecord[]>;
 }
 export interface TenantSelection {
-  /** Must be obtained from a trusted, integrity-protected server session. */
   selectedTenantId(headers: Readonly<Record<string, string | undefined>>): Promise<string | null>;
 }
-/** A user with multiple tenants never gets an arbitrary first membership. */
-/** Bind tenant selection to the request rather than sharing mutable global state. */
 export function createRequestSessionDependencies(
   headers: Readonly<Record<string, string | undefined>>,
   identity: VerifiedIdentityProvider,
@@ -38,7 +34,7 @@ export function createRequestSessionDependencies(
       if (rows.length === 0) return null;
       const tenantName = rows[0]?.tenantName;
       const displayName = rows[0]?.displayName;
-      if (!tenantName || !displayName || rows.some(row =>
+      if (!tenantName?.trim() || !displayName?.trim() || rows.some(row =>
         row.tenantName !== tenantName || row.displayName !== displayName
       )) return null;
       const roles = [...new Set(rows.map(row => row.roleCode))];
