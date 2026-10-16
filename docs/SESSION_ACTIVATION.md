@@ -1,38 +1,55 @@
-# Session activation and security boundary
+# Service Desk — autenticação e publicação
 
-Status: **not deployed**. The UI requests `GET /api/session` using same-origin credentials
-and no-store. The transport-neutral HTTP handler in
-`src/authentication/session-http.ts` delegates to
-`src/authentication/server-session.ts`.
+**Estado: candidato em branch Draft; não publicado em produção.**
 
-## Required production integration
+## Integração HTTP + interface
 
-1. Mount the route at the same origin as the UI. Accept only GET and never cache
-   its response. Configure CSRF protection for any future mutating routes.
-2. Verify the authenticated user with Supabase Auth **on the server** using the
-   authenticated session's real cookie/token and provider verification. Never
-   decode an unsigned client claim into an identity.
-3. Resolve membership from the database using the verified `auth.users.id`.
-   Require `memberships.status = 'active'`, join `roles` by both role id and
-   tenant id, and join `tenants` for display name. Never trust client roles.
-4. Select tenant context using a separately verified membership. For users with
-   multiple active tenants, do not silently choose the first tenant: require
-   an explicit, authenticated tenant selection and revalidate it server-side.
-5. Map only the six supported role codes to the public session response. Deny
-   inactive membership, missing tenant, invalid roles and provider failures.
-6. Authorize every protected command server-side, with tenant-scoped queries
-   and RLS. A successful session response is **not** permission to access any
-   tenant's records.
-7. Implement secure logout and session revocation, expiration handling,
-   cookie attributes, CSP and end-to-end browser validation before release.
+O servidor Node em `src/authentication/start-session-server.ts` integra rotas de
+autenticação e arquivos compilados Vite na mesma origem. Executar
+`npm ci && npm run ci` antes do start; o build cria `dist/` e `dist-web/`.
 
-## Explicitly unfinished
+Variáveis de ambiente **apenas no backend**:
 
-Supabase Auth identity verification, membership database adapter, and a localhost HTTP
-session server are implemented and were validated in Factory QA run 38955363511.
-A deployed same-origin HTTP server, secure session cookie issuer, tenant-selection
-endpoint, logout handler and browser E2E do not exist yet. The implemented
-verification modules are **not** a live login system.
+- `PORT`: porta local, 1–65535
+- `SERVICE_DESK_WEB_ROOT`: diretório absoluto existente que contém `dist-web/index.html`
+- `SERVICE_DESK_PUBLIC_ORIGIN`: origem HTTPS exata da UI para validação Origin/CSRF
+- `SERVICE_DESK_SUPABASE_URL`: URL HTTPS do Supabase dedicado ao Service Desk
+- `SERVICE_DESK_SUPABASE_ANON_KEY`: chave pública usada com Supabase Auth
+- `SERVICE_DESK_SUPABASE_SECRET_KEY`: chave privilegiada para consultas server-side
+- `SERVICE_DESK_TENANT_SIGNING_KEY`: segredo de assinatura de empresa, ao menos 32 caracteres
 
-Never embed `SUPABASE_SECRET_KEY`, service-role credentials or cross-repository
-tokens in browser code. No migration, preview or production deployment is implied.
+Processo local: `node dist/src/authentication/start-session-server.js`.
+Escuta `127.0.0.1`; é obrigatório um proxy HTTPS na **mesma origem** para
+interface e `/api/**`, sem cache de respostas autenticadas. Não publicar
+porta Node diretamente. Assets fora da whitelist permanecem indisponíveis.
+
+Rotas:
+- `GET /api/auth/csrf`
+- `POST /api/auth/login`
+- `POST /api/auth/select-tenant`
+- `GET /api/session`
+- `POST /api/auth/logout`
+
+As rotas mutantes validam Origin e CSRF. Login verifica identidade com
+Supabase Auth e membership ativa com papéis reconhecidos; o cookie de
+empresa é assinado e revalidado no backend. A UI não recebe chave privilegiada.
+
+## Restrições e bloqueios antes de produção
+
+1. **Refresh ausente**: o access token expira em até 1 hora; não assumir
+   renovação silenciosa. Implementar refresh seguro com rotação e revogação.
+2. **Logout remoto ausente**: apaga cookies locais, mas o token previamente
+   obtido pode continuar válido no provedor até expirar. Não declarar
+   revogação no Supabase.
+3. **Teste real pendente**: mocks de HTTP não equivalem a login autenticado
+   na instância de destino; validar indisponibilidade, CSRF, expiração,
+   múltiplas empresas e autorização em E2E real.
+4. **Schema de segurança**: validar RLS e FKs com PostgreSQL descartável
+   para a PR #5 e confirmar integração com REST após mudanças do schema.
+5. **Preview não verificado**: falta domínio HTTPS, credenciais e QA de
+   navegador no candidato SHA exato, com evidência durável.
+6. **Produção requer gate humano**: não aplicar migrations nem efetuar
+   merge que publique produção sem autorização específica.
+
+A PR #3 e a PR #5 são Drafts independentes até reconciliação segura.
+O Supabase da Factory não é banco de dados de produção do Service Desk.
