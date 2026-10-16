@@ -1,0 +1,33 @@
+name: Service Desk verification
+on:
+  push:
+    branches: ["quality/**"]
+  pull_request:
+    branches: ["factory/change-set-effc36be"]
+permissions:
+  contents: read
+concurrency:
+  group: service-desk-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+      # Bootstrap once, then commit the generated lockfile and remove this step.
+      - name: Bootstrap lockfile (no scripts)
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned install and real TS/TSX/build/tests
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run ci
+      - name: Emit lockfile for repository pinning
+        if: success()
+        run: |
+          echo LOCKFILE_JSON_BEGIN
+          node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("node:fs").readFileSync("package-lock.json", "utf8"))) + "\n")'
+          echo LOCKFILE_JSON_END
