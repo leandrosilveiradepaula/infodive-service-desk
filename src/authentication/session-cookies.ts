@@ -20,7 +20,8 @@ export function verifyTenantSelection(
   const match = /^([0-9a-f-]{36})\.([0-9]{10,13})\.([0-9a-f]{64})$/.exec(value);
   if (!match) return null;
   const [, tenantId, expires, signature] = match;
-  if (!tenantId || !expires || !signature || Number(expires) <= Date.now()) return null;
+  if (!tenantId || !expires || !signature || !Number.isSafeInteger(Number(expires)) ||
+      Number(expires) <= Date.now() || Number(expires) > Date.now() + 3600000) return null;
   const message = userId + "." + tenantId + "." + expires;
   const expected = createHmac("sha256", signingKey).update(message).digest();
   const actual = Buffer.from(signature, "hex");
@@ -29,13 +30,14 @@ export function verifyTenantSelection(
 }
 export function signTenantSelection(userId: string, tenantId: string, expiresAt: number, key: string): string {
   if (key.length < 32 || !/^[0-9a-f-]{36}$/.test(tenantId) || !userId.trim() ||
-      !Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) throw Error("Invalid tenant selection");
+      !Number.isSafeInteger(expiresAt) || expiresAt <= Date.now() ||
+      expiresAt > Date.now() + 3600000) throw Error("Invalid tenant selection");
   const expires = String(expiresAt);
   const signature = createHmac("sha256", key).update(userId + "." + tenantId + "." + expires).digest("hex");
   return tenantId + "." + expires + "." + signature;
 }
 
-/** The refresh and tenant cookies are bounded to seven days, not permanent browser storage. */
+/** The refresh and tenant cookies are bounded to one hour, not permanent browser storage. */
 export const SESSION_COOKIE_MAX_AGE = 3600;
 export function extractRefreshToken(header: string | undefined): string | null {
   const value = cookieValue(header, "sd-refresh-token");
