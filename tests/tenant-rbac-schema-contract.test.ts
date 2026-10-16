@@ -39,6 +39,8 @@ test("tenant authorization remains bound to actual session and membership", () =
 
 test("later domain migrations enforce the same tenant in linked records", () => {
   const knowledge = readFileSync(fileURLToPath(new URL("../../supabase/migrations/20261015000400_knowledge_base.sql", import.meta.url)), "utf8");
+  assert.match(knowledge, /knowledge_categories_collection_tenant_fk/);
+  assert.match(knowledge, /foreign key \(collection_id, tenant_id\)/);
   const tickets = readFileSync(fileURLToPath(new URL("../../supabase/migrations/20261015000500_ticket_domain.sql", import.meta.url)), "utf8");
   const sla = readFileSync(fileURLToPath(new URL("../../supabase/migrations/20261015000600_contracts_sla_domain.sql", import.meta.url)), "utf8");
 
