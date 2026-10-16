@@ -59,3 +59,15 @@ empresa é assinado e revalidado no backend. A UI não recebe chave privilegiada
 
 A PR #3 e a PR #5 são Drafts independentes até reconciliação segura.
 O Supabase da Factory não é banco de dados de produção do Service Desk.
+
+## Seleção de empresa no login
+
+O login não exige mais que o usuário conheça o UUID do tenant. Após verificar
+as credenciais no Supabase e reler memberships ativas no servidor, o sistema
+seleciona automaticamente o tenant somente se houver exatamente um. Havendo
+múltiplos tenants válidos, responde HTTP 409 com nomes e IDs das empresas
+**já autorizadas** e exige nova submissão da autenticação com seleção explícita.
+A resposta 409 não emite cookies de acesso ou refresh. Os identificadores
+não são aceitos como prova de autorização: memberships são revalidadas no
+servidor na segunda submissão. Credenciais não são persistidas em storage
+local. Isso ainda exige E2E autenticado em Preview para homologação.
