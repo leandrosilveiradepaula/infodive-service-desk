@@ -13,7 +13,7 @@
     "typecheck": "npm run typecheck:server && npm run typecheck:web",
     "build:web": "vite build && node scripts/verify-web-build.mjs",
     "build": "npm run build:server && npm run typecheck:web && npm run build:web",
-    "test": "npm run build:server && node --test dist/tests",
+    "test": "npm run build:server && cd dist && node --test",
     "ci": "npm run typecheck && npm test && npm run build:web"
   },
   "dependencies": {
