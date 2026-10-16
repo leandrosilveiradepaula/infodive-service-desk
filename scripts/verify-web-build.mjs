@@ -14,4 +14,4 @@ for (const path of assets.filter((file) => file.endsWith(".js"))) {
   assert.ok(!js.includes("SUPABASE_SERVICE_ROLE_KEY"), "Server-only variable bundled");
   assert.ok(!js.includes("sb_secret_"), "Supabase secret key marker bundled");
 }
-console.log("web_bundle_verified: true; auth_not_integrated: true");
+console.log("web_bundle_verified: true; same_origin_http_source_implemented: true; live_preview_e2e_pending: true");
