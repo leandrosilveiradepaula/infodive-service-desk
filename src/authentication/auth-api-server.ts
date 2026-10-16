@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { serveStaticWeb } from "./static-web";
 import { createRequestSessionDependencies } from "./session-adapters";
 import { createSupabaseIdentityProvider } from "./supabase-identity";
 import { createSupabaseMembershipRepository } from "./supabase-memberships";
@@ -16,6 +17,7 @@ export interface AuthApiConfig {
   readonly secretKey: string;
   readonly tenantSigningKey: string;
   readonly publicOrigin: string;
+  readonly webRoot?: string;
 }
 export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch = fetch) {
   if (!config.publicOrigin.startsWith("https://") || config.tenantSigningKey.length < 32)
@@ -104,6 +106,7 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
         send(200, { ok: true }, { "Set-Cookie": [...clearAuthCookies()] });
         return;
       }
+      if (await serveStaticWeb(incoming.method ?? "", path, config.webRoot, response)) return;
       let verifiedUserId: string | null = null;
       const dependencies = createRequestSessionDependencies(headers, {
         verifySession: async h => {
