@@ -9,7 +9,7 @@ import { issueCsrf, clearAuthCookies } from "./csrf-cookie";
 import { selectTenant } from "./select-tenant";
 import { validLogoutRequest } from "./logout-policy";
 import { exchangeCredentials } from "./credential-exchange";
-import { signTenantSelection } from "./session-cookies";
+import { signTenantSelection, issueAuthCookies } from "./session-cookies";
 
 export interface AuthApiConfig {
   readonly supabaseUrl: string;
@@ -67,17 +67,13 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
           password: typeof payload.password === "string" ? payload.password : "",
           tenantId: typeof payload.tenantId === "string" ? payload.tenantId : ""
         }, request);
-        if (result.status !== 200 || !result.token || !result.userId || !result.expiresIn) {
+        if (result.status !== 200 || !result.token || !result.refreshToken || !result.userId || !result.expiresIn) {
           send(result.status, { ok: false }); return;
         }
         const selection = signTenantSelection(result.userId, payload.tenantId as string,
           Date.now() + result.expiresIn * 1000, config.tenantSigningKey);
-        send(200, { ok: true }, { "Set-Cookie": [
-          "sd-access-token=" + encodeURIComponent(result.token) +
-            "; Path=/; Max-Age=" + result.expiresIn + "; HttpOnly; Secure; SameSite=Lax",
-          "sd-tenant-selection=" + selection +
-            "; Path=/; Max-Age=" + result.expiresIn + "; HttpOnly; Secure; SameSite=Lax"
-        ] });
+        send(200, { ok: true }, { "Set-Cookie": issueAuthCookies(result.token, result.refreshToken,
+          selection, result.expiresIn) });
         return;
       }
       if (path === "/api/auth/select-tenant") {
