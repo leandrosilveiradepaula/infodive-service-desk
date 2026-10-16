@@ -101,7 +101,7 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
         if (incoming.method !== "POST") { send(405, { ok: false }, { Allow: "POST" }); return; }
         const origin = incoming.headers.origin;
         if (!validLogoutRequest(headers, config.publicOrigin)) { send(403, { ok: false }); return; }
-        send(200, { ok: true }, { "Set-Cookie": clearAuthCookies() });
+        send(200, { ok: true }, { "Set-Cookie": [...clearAuthCookies()] });
         return;
       }
       let verifiedUserId: string | null = null;
