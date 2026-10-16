@@ -9,7 +9,8 @@ import { issueCsrf, clearAuthCookies } from "./csrf-cookie";
 import { selectTenant } from "./select-tenant";
 import { validLogoutRequest } from "./logout-policy";
 import { exchangeCredentials } from "./credential-exchange";
-import { signTenantSelection, issueAuthCookies } from "./session-cookies";
+import { signTenantSelection, issueAuthCookies, cookieValue, extractRefreshToken } from "./session-cookies";
+import { rotateSession } from "./refresh-session";
 
 export interface AuthApiConfig {
   readonly supabaseUrl: string;
@@ -74,6 +75,29 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
           Date.now() + result.expiresIn * 1000, config.tenantSigningKey);
         send(200, { ok: true }, { "Set-Cookie": issueAuthCookies(result.token, result.refreshToken,
           selection, result.expiresIn) });
+        return;
+      }
+      if (path === "/api/auth/refresh") {
+        if (incoming.method !== "POST") { send(405, { ok: false }, { Allow: "POST" }); return; }
+        if (!validLogoutRequest(headers, config.publicOrigin)) { send(403, { ok: false }); return; }
+        const refresh = extractRefreshToken(headers.cookie);
+        const selection = cookieValue(headers.cookie, "sd-tenant-selection");
+        if (!refresh || !selection) { send(401, { ok: false }, { "Set-Cookie": [...clearAuthCookies()] }); return; }
+        const tenant = /^([0-9a-f-]{36})\./.exec(selection)?.[1];
+        if (!tenant) { send(401, { ok: false }, { "Set-Cookie": [...clearAuthCookies()] }); return; }
+        const rotated = await rotateSession({
+          supabaseUrl: config.supabaseUrl, anonKey: config.anonKey, memberships
+        }, refresh, tenant, request);
+        if (rotated.status !== 200 || !rotated.token || !rotated.refreshToken || !rotated.userId || !rotated.expiresIn) {
+          send(rotated.status, { ok: false }, rotated.status === 503 ? {} : { "Set-Cookie": [...clearAuthCookies()] }); return;
+        }
+        if (verifyTenantSelection(headers.cookie, rotated.userId, config.tenantSigningKey) !== tenant) {
+          send(403, { ok: false }, { "Set-Cookie": [...clearAuthCookies()] }); return;
+        }
+        const signed = signTenantSelection(rotated.userId, tenant, Date.now() + rotated.expiresIn * 1000, config.tenantSigningKey);
+        send(200, { ok: true }, { "Set-Cookie": issueAuthCookies(
+          rotated.token, rotated.refreshToken, signed, rotated.expiresIn
+        ) });
         return;
       }
       if (path === "/api/auth/select-tenant") {
