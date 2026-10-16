@@ -6,6 +6,7 @@ import { extractAccessToken, verifyTenantSelection } from "./session-cookies";
 import { handleSessionHttpRequest } from "./session-http";
 import { issueCsrf, clearAuthCookies } from "./csrf-cookie";
 import { selectTenant } from "./select-tenant";
+import { validLogoutRequest } from "./logout-policy";
 
 export interface AuthApiConfig {
   readonly supabaseUrl: string;
@@ -63,7 +64,7 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
       if (path === "/api/auth/logout") {
         if (incoming.method !== "POST") { send(405, { ok: false }, { Allow: "POST" }); return; }
         const origin = incoming.headers.origin;
-        if (!origin || origin !== config.publicOrigin) { send(403, { ok: false }); return; }
+        if (!validLogoutRequest(headers, config.publicOrigin)) { send(403, { ok: false }); return; }
         send(200, { ok: true }, { "Set-Cookie": clearAuthCookies() });
         return;
       }
