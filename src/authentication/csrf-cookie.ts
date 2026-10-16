@@ -24,6 +24,7 @@ export function issueCsrf(method: string): CsrfResult {
 export function clearAuthCookies(): readonly string[] {
   return [
     "sd-access-token=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+    "sd-refresh-token=; Path=/api/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
     "sd-tenant-selection=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
     "sd-csrf=; Path=/; Max-Age=0; Secure; SameSite=Lax"
   ];
