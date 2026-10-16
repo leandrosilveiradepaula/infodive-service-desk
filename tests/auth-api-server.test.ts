@@ -10,7 +10,7 @@ test("integrated HTTP auth API boots CSRF and validates tenant selection", async
     publicOrigin: "https://desk.example.test"
   }, async (url) => {
     if (String(url).includes("/auth/v1/token"))
-      return new Response(JSON.stringify({ access_token: "verified-token", expires_in: 3600 }), { status: 200 });
+      return new Response(JSON.stringify({ access_token: "verified-token", refresh_token: "mock-refresh-only", expires_in: 3600 }), { status: 200 });
     if (String(url).includes("/auth/v1/user"))
       return new Response(JSON.stringify({ id: userId, email: "user@example.test" }), { status: 200 });
     if (String(url).includes("/rest/v1/users"))
