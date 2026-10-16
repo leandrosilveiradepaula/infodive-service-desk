@@ -30,7 +30,7 @@ test("full HTTP session verifies Supabase identity, active membership and signed
     const body = await valid.json() as { authenticated: boolean; profile: { tenantName: string } };
     assert.equal(body.authenticated, true);
     assert.equal(body.profile.tenantName, "Infodive");
-    const denied = await fetch(url, { headers: { cookie: "sd-access-token=opaque; sd-tenant-selection=" + selection.slice(0, -1) + "0" } });
+    const denied = await fetch(url, { headers: { cookie: "sd-access-token=opaque; sd-tenant-selection=" + selection.slice(0, -1) + (selection.endsWith("0") ? "1" : "0") } });
     assert.equal(denied.status, 403);
   } finally {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
