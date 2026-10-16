@@ -34,3 +34,26 @@ export function signTenantSelection(userId: string, tenantId: string, expiresAt:
   const signature = createHmac("sha256", key).update(userId + "." + tenantId + "." + expires).digest("hex");
   return tenantId + "." + expires + "." + signature;
 }
+
+/** The refresh and tenant cookies are bounded to seven days, not permanent browser storage. */
+export const SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+export function extractRefreshToken(header: string | undefined): string | null {
+  const value = cookieValue(header, "sd-refresh-token");
+  return value && value.length >= 10 && value.length <= 8192 ? value : null;
+}
+export function issueAuthCookies(
+  accessToken: string, refreshToken: string, selection: string, accessSeconds: number
+): string[] {
+  if (!accessToken || !refreshToken || !selection ||
+      !Number.isInteger(accessSeconds) || accessSeconds < 1 || accessSeconds > 3600) {
+    throw Error("Invalid session cookies");
+  }
+  return [
+    "sd-access-token=" + encodeURIComponent(accessToken) +
+      "; Path=/; Max-Age=" + accessSeconds + "; HttpOnly; Secure; SameSite=Lax",
+    "sd-refresh-token=" + encodeURIComponent(refreshToken) +
+      "; Path=/api/auth; Max-Age=" + SESSION_COOKIE_MAX_AGE + "; HttpOnly; Secure; SameSite=Lax",
+    "sd-tenant-selection=" + selection +
+      "; Path=/; Max-Age=" + SESSION_COOKIE_MAX_AGE + "; HttpOnly; Secure; SameSite=Lax"
+  ];
+}
