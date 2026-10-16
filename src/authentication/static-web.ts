@@ -11,7 +11,8 @@ export async function serveStaticWeb(method: string, pathname: string, root: str
   const name = pathname === "/" || pathname === "/index.html" ? "index.html" : pathname.slice(1);
   try {
     const [base, target] = await Promise.all([realpath(resolve(root)), realpath(resolve(root, name))]);
-    if (!target.startsWith(base + sep)) throw Error("Invalid path");
+    const allowed = name === "index.html" ? base : await realpath(resolve(base, "assets"));
+    if (!target.startsWith(allowed + sep)) throw Error("Invalid path");
     const body = await readFile(target);
     const type = name === "index.html" ? "text/html" : mime[name.split(".").pop() ?? ""] ?? "application/octet-stream";
     response.writeHead(200, {...security, "Content-Type":type+"; charset=utf-8", "Cache-Control":name==="index.html"?"no-store":"public, max-age=31536000, immutable"});
