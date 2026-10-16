@@ -69,3 +69,35 @@ test("after authentication, one tenant is automatic and multiple require explici
     { ...input, tenantId: second }, mock);
   assert.equal(selected.selectedTenantId, second);
 });
+
+
+test("denied tenant authorization revokes the provider grant without returning bearer tokens", async () => {
+  const calls: string[] = [];
+  const result = await exchangeCredentials(config, { ...input, tenantId: "33333333-3333-4333-8333-333333333333" }, async (url, init) => {
+    calls.push(String(url));
+    if (String(url).includes("/auth/v1/token")) return new Response(JSON.stringify({
+      access_token: "verified-token", refresh_token: "verified-refresh-token", expires_in: 1800
+    }), { status: 200 });
+    if (String(url).includes("/auth/v1/logout")) {
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer verified-token");
+      assert.match(String(url), /scope=local$/);
+      return new Response(null, { status: 204 });
+    }
+    return new Response(JSON.stringify({ id: userId, email: input.email }), { status: 200 });
+  });
+  assert.equal(result.status, 403);
+  assert.equal(result.token, undefined);
+  assert.equal(result.refreshToken, undefined);
+  assert.equal(calls.filter(item => item.includes("/auth/v1/logout")).length, 1);
+});
+test("failed revocation of unauthorized password grant fails closed", async () => {
+  const result = await exchangeCredentials(config, { ...input, tenantId: "33333333-3333-4333-8333-333333333333" }, async url => {
+    if (String(url).includes("/auth/v1/token")) return new Response(JSON.stringify({
+      access_token: "verified-token", refresh_token: "verified-refresh-token", expires_in: 1800
+    }), { status: 200 });
+    if (String(url).includes("/auth/v1/logout")) return new Response(null, { status: 503 });
+    return new Response(JSON.stringify({ id: userId, email: input.email }), { status: 200 });
+  });
+  assert.equal(result.status, 503);
+  assert.equal(result.token, undefined);
+});
