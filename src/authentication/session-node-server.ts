@@ -2,15 +2,16 @@ import { createServer } from "node:http";
 import { handleSessionHttpRequest } from "./session-http";
 import type { SessionDependencies } from "./server-session";
 
-/** Real HTTP listener, injected verified identity and membership providers. */
-export function createSessionHttpServer(dependencies: SessionDependencies) {
+export function createSessionHttpServer(
+  dependencies: SessionDependencies | ((headers: Readonly<Record<string, string | undefined>>) => SessionDependencies)
+) {
   return createServer(async (request, response) => {
+    const headers = { cookie: request.headers.cookie };
+    const scoped = typeof dependencies === "function" ? dependencies(headers) : dependencies;
     const result = await handleSessionHttpRequest({
-      method: request.method ?? "",
-      url: request.url ?? "",
-      headers: { cookie: request.headers.cookie }
-    }, dependencies);
-    if (result === null) {
+      method: request.method ?? "", url: request.url ?? "", headers
+    }, scoped);
+    if (!result) {
       response.writeHead(404, { "Cache-Control": "no-store", "Content-Type": "application/json" });
       response.end(JSON.stringify({ error: "not_found" }));
       return;
