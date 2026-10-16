@@ -31,3 +31,19 @@ test("credential exchange rejects invalid credentials and foreign tenant", async
     : { id: userId, email: input.email }), { status: 200 }));
   assert.equal(foreign.status, 403);
 });
+
+test("login refuses unrecognized roles and incomplete membership even with valid Supabase password", async () => {
+  const foreignRoles: MembershipRepository = {
+    findByUserId: async () => [{ userId, tenantId, tenantName: "Company", displayName: "Agent",
+      roleCode: "unexpected_superadmin", membershipStatus: "active" }]
+  };
+  const incompleteProfile: MembershipRepository = {
+    findByUserId: async () => [{ userId, tenantId, tenantName: "Company", displayName: " ",
+      roleCode: "service_agent", membershipStatus: "active" }]
+  };
+  const mock = async (url: URL | RequestInfo) => new Response(JSON.stringify(String(url).includes("/auth/v1/token")
+    ? { access_token: "verified-token", expires_in: 3600 }
+    : { id: userId, email: input.email }), { status: 200 });
+  assert.equal((await exchangeCredentials({ ...config, memberships: foreignRoles }, input, mock)).status, 403);
+  assert.equal((await exchangeCredentials({ ...config, memberships: incompleteProfile }, input, mock)).status, 403);
+});
