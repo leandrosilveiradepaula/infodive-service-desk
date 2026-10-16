@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-const packageInfo = JSON.parse(readFileSync("package.json", "utf8"));
-const tsconfig = JSON.parse(readFileSync("tsconfig.web.json", "utf8"));
-const entry = readFileSync("src/web/main.tsx", "utf8");
+const packageInfo = JSON.parse(readFileSync("../package.json", "utf8"));
+const tsconfig = JSON.parse(readFileSync("../tsconfig.web.json", "utf8"));
+const entry = readFileSync("../src/web/main.tsx", "utf8");
 
 test("CI compiles TSX and exercises real build rather than reporting an empty queue", () => {
   assert.equal(tsconfig.compilerOptions.jsx, "react-jsx");

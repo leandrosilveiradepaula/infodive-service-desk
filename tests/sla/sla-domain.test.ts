@@ -23,13 +23,13 @@ const businessRule = {
 };
 
 test("calculates business-hour targets across a weekend in the configured timezone", () => {
-  const targets = calculateSlaTargets(new Date("2026-01-02T19:30:00.000Z"), businessRule); // Friday 16:30 BRT
-  assert.equal(targets.firstResponseAt.toISOString(), "2026-01-05T13:30:00.000Z"); // Monday 10:30 BRT
+  const targets = calculateSlaTargets(new Date("2026-01-02T20:30:00.000Z"), { ...businessRule, firstResponseMinutes: 120 }); // Friday 17:30 BRT: 30m Friday + 90m Monday
+  assert.equal(targets.firstResponseAt.toISOString(), "2026-01-05T13:30:00.000Z"); // Monday 10:30 BRT, after crossing the weekend
 });
 
 test("skips configured holidays and supports explicit 24x7 rules", () => {
   const holidayStart = new Date("2025-12-31T20:30:00.000Z"); // 17:30 BRT
-  assert.equal(calculateSlaTargets(holidayStart, businessRule).firstResponseAt.toISOString(), "2026-01-02T13:30:00.000Z");
+  assert.equal(calculateSlaTargets(holidayStart, businessRule).firstResponseAt.toISOString(), "2026-01-02T12:30:00.000Z");
 
   const aroundTheClock = { ...businessRule, schedule: { kind: "24x7" as const } };
   assert.equal(calculateSlaTargets(holidayStart, aroundTheClock).firstResponseAt.toISOString(), "2025-12-31T21:30:00.000Z");
