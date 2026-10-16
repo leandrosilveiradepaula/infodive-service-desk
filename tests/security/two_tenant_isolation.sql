@@ -48,10 +48,26 @@ end $$;
 reset role;
 set role anon;
 select set_config('request.jwt.claim.sub','',false);
-do $$
+do $
+declare
+ visible_count integer;
+ read_denied boolean := false;
 begin
- if (select count(*) from public.tenants) <> 0 then raise exception 'Anonymous tenant leak'; end if;
-end $$;
+  -- Some policies intentionally deny access to their helper function
+  -- before evaluating a tenant row. Both explicit denial and zero
+  -- visible rows are safe; an unexpected SQL exception still fails.
+  begin
+    select count(*) into visible_count from public.tenants;
+  exception when insufficient_privilege then
+    read_denied := true;
+  end;
+  if not read_denied and visible_count <> 0 then
+    raise exception 'Anonymous tenant leak: % rows', visible_count;
+  end if;
+  if has_function_privilege('anon','public.is_active_tenant_member(uuid)','EXECUTE') then
+    raise exception 'Anonymous role can execute tenant membership helper';
+  end if;
+end $;
 reset role;
 
 -- Next-domain FKs and triggers: a privileged write must never create a
