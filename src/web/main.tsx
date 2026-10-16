@@ -63,7 +63,8 @@ function LogoutButton({ onLogout }: { onLogout: () => void }) {
         method: "POST", credentials: "same-origin", cache: "no-store",
         headers: { "x-csrf-token": payload.csrfToken }
       });
-      if (!result.ok) throw Error("Logout");
+      // The server clears local cookies even when provider revocation returns 503.
+      if (!result.ok && result.status !== 503) throw Error("Logout");
       onLogout();
     } catch { setBusy(false); }
   }
