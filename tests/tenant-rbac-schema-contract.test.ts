@@ -53,6 +53,8 @@ test("later domain migrations enforce the same tenant in linked records", () => 
   assert.match(sla, /rule\.contract_id = new\.contract_id/);
   assert.match(sla, /entry\.contract_id = new\.contract_id/);
   assert.match(sla, /rule\.id = new\.rule_version_id and rule\.tenant_id = new\.tenant_id/);
+  assert.match(sla, /elsif tg_table_name = 'contract_authorized_services' then/);
+  assert.match(sla, /revoke all on function public\.validate_contract_sla_scope\(\) from public, anon, authenticated/);
 });
 
 test("delegated audit events cannot be submitted through the authenticated Data API", () => {
