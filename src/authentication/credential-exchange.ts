@@ -27,8 +27,12 @@ export async function exchangeCredentials(
     const identity = await provider.verifySession({ cookie: "sd-access-token=" + encodeURIComponent(token) });
     if (!identity) return { status: 401 };
     const rows = await config.memberships.findByUserId(identity.userId);
-    if (!rows.some(row => row.userId === identity.userId && row.tenantId === input.tenantId &&
-      row.membershipStatus === "active")) return { status: 403 };
+    const selected = rows.filter(row => row.userId === identity.userId && row.tenantId === input.tenantId &&
+      row.membershipStatus === "active");
+    const allowedRoles = new Set(["tenant_administrator", "service_manager", "service_agent",
+      "requester", "customer_administrator", "customer_user"]);
+    if (!selected.length || !selected.every(row => allowedRoles.has(row.roleCode) &&
+      row.tenantName.trim() && row.displayName.trim())) return { status: 403 };
     return { status: 200, token, userId: identity.userId, expiresIn: Math.min(Math.floor(values.expires_in), 3600) };
   } catch { return { status: 503 }; }
 }
