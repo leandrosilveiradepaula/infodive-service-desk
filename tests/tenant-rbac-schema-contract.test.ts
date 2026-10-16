@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-const sql = readFileSync("supabase/migrations/20261015000200_tenancy_rbac_rls.sql", "utf8");
+const sql = readFileSync("../supabase/migrations/20261015000200_tenancy_rbac_rls.sql", "utf8");
 
 test("cross-tenant role and company relationships use composite database constraints", () => {
   for (const key of [
