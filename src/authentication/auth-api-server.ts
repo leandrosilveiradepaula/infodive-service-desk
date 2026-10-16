@@ -11,6 +11,7 @@ import { validLogoutRequest } from "./logout-policy";
 import { exchangeCredentials } from "./credential-exchange";
 import { signTenantSelection, issueAuthCookies, cookieValue, extractRefreshToken } from "./session-cookies";
 import { rotateSession } from "./refresh-session";
+import { revokeCurrentSession } from "./revoke-session";
 
 export interface AuthApiConfig {
   readonly supabaseUrl: string;
@@ -121,9 +122,10 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
       }
       if (path === "/api/auth/logout") {
         if (incoming.method !== "POST") { send(405, { ok: false }, { Allow: "POST" }); return; }
-        const origin = incoming.headers.origin;
         if (!validLogoutRequest(headers, config.publicOrigin)) { send(403, { ok: false }); return; }
-        send(200, { ok: true }, { "Set-Cookie": [...clearAuthCookies()] });
+        const revoke = await revokeCurrentSession(config.supabaseUrl, config.anonKey, headers.cookie, request);
+        send(revoke === "unavailable" ? 503 : 200, { ok: revoke !== "unavailable" },
+          { "Set-Cookie": [...clearAuthCookies()] });
         return;
       }
       if (await serveStaticWeb(incoming.method ?? "", path, config.webRoot, response)) return;
