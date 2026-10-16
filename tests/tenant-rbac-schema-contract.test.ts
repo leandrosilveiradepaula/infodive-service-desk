@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const sql = readFileSync("../supabase/migrations/20261015000200_tenancy_rbac_rls.sql", "utf8");
+const sql = readFileSync(fileURLToPath(new URL("../../supabase/migrations/20261015000200_tenancy_rbac_rls.sql", import.meta.url)), "utf8");
 
 test("cross-tenant role and company relationships use composite database constraints", () => {
   for (const key of [
@@ -37,9 +38,9 @@ test("tenant authorization remains bound to actual session and membership", () =
 
 
 test("later domain migrations enforce the same tenant in linked records", () => {
-  const knowledge = readFileSync("../supabase/migrations/20261015000400_knowledge_base.sql", "utf8");
-  const tickets = readFileSync("../supabase/migrations/20261015000500_ticket_domain.sql", "utf8");
-  const sla = readFileSync("../supabase/migrations/20261015000600_contracts_sla_domain.sql", "utf8");
+  const knowledge = readFileSync(fileURLToPath(new URL("../../supabase/migrations/20261015000400_knowledge_base.sql", import.meta.url)), "utf8");
+  const tickets = readFileSync(fileURLToPath(new URL("../../supabase/migrations/20261015000500_ticket_domain.sql", import.meta.url)), "utf8");
+  const sla = readFileSync(fileURLToPath(new URL("../../supabase/migrations/20261015000600_contracts_sla_domain.sql", import.meta.url)), "utf8");
 
   assert.match(knowledge, /ticket\.id = new\.ticket_id and ticket\.tenant_id = new\.tenant_id/);
   assert.match(tickets, /resource_id = new\.ticket_id/);
