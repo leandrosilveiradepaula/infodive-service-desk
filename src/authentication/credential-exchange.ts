@@ -2,13 +2,17 @@ import { createSupabaseIdentityProvider } from "./supabase-identity";
 import { extractAccessToken } from "./session-cookies";
 import type { MembershipRepository } from "./session-adapters";
 
+export interface AvailableTenant { readonly id: string; readonly name: string; }
+
 export async function exchangeCredentials(
   config: { supabaseUrl: string; anonKey: string; memberships: MembershipRepository },
   input: { email: string; password: string; tenantId: string },
   request: typeof fetch
-): Promise<{ status: number; token?: string; userId?: string; expiresIn?: number; refreshToken?: string }> {
+): Promise<{ status: number; token?: string; userId?: string; expiresIn?: number; refreshToken?: string;
+  selectedTenantId?: string; tenants?: readonly AvailableTenant[] }> {
   if (!input.email || input.email.length > 254 || !input.password ||
-      input.password.length > 1024 || !/^[0-9a-f-]{36}$/.test(input.tenantId)) return { status: 400 };
+      input.password.length > 1024 ||
+      (input.tenantId !== "" && !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.tenantId))) return { status: 400 };
   try {
     const response = await request(config.supabaseUrl.replace(/\/$/, "") + "/auth/v1/token?grant_type=password", {
       method: "POST", headers: { apikey: config.anonKey, "Content-Type": "application/json" },
@@ -29,12 +33,25 @@ export async function exchangeCredentials(
     const identity = await provider.verifySession({ cookie: "sd-access-token=" + encodeURIComponent(token) });
     if (!identity) return { status: 401 };
     const rows = await config.memberships.findByUserId(identity.userId);
-    const selected = rows.filter(row => row.userId === identity.userId && row.tenantId === input.tenantId &&
-      row.membershipStatus === "active");
     const allowedRoles = new Set(["tenant_administrator", "service_manager", "service_agent",
       "requester", "customer_administrator", "customer_user"]);
-    if (!selected.length || !selected.every(row => allowedRoles.has(row.roleCode) &&
-      row.tenantName.trim() && row.displayName.trim())) return { status: 403 };
-    return { status: 200, token, refreshToken: values.refresh_token, userId: identity.userId, expiresIn: Math.min(Math.floor(values.expires_in), 3600) };
+    const active = rows.filter(row => row.userId === identity.userId && row.membershipStatus === "active");
+    const choices = new Map<string, string>();
+    // Untrusted/inconsistent membership records never become a selectable company.
+    for (const row of active) {
+      if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(row.tenantId) ||
+          !allowedRoles.has(row.roleCode) || !row.displayName.trim() || !row.tenantName.trim() ||
+          (choices.has(row.tenantId) && choices.get(row.tenantId) !== row.tenantName))
+        return { status: 403 };
+      choices.set(row.tenantId, row.tenantName);
+    }
+    if (!choices.size || choices.size > 50) return { status: 403 };
+    const tenants = [...choices].map(([id, name]): AvailableTenant => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    const selectedTenantId = input.tenantId ||
+      (tenants.length === 1 ? tenants[0]?.id : undefined);
+    if (selectedTenantId && !choices.has(selectedTenantId)) return { status: 403 };
+    return { status: 200, token, refreshToken: values.refresh_token, userId: identity.userId,
+      expiresIn: Math.min(Math.floor(values.expires_in), 3600), selectedTenantId, tenants };
   } catch { return { status: 503 }; }
 }
