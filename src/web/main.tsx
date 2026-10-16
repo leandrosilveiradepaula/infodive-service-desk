@@ -14,6 +14,7 @@ function LoginForm({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [tenantId, setTenantId] = useState("");
+  const [tenants, setTenants] = useState<readonly { id: string; name: string }[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -31,6 +32,16 @@ function LoginForm({ onAuthenticated }: { onAuthenticated: () => void }) {
         headers: { "Content-Type": "application/json", "x-csrf-token": data.csrfToken },
         body: JSON.stringify({ email, password, tenantId })
       });
+      if (response.status === 409) {
+        const result = await response.json() as { code?: string; tenants?: { id: string; name: string }[] };
+        if (result.code === "tenant_selection_required" && Array.isArray(result.tenants) &&
+            result.tenants.length > 1 && result.tenants.length <= 50 && result.tenants.every(item =>
+              typeof item.id === "string" && typeof item.name === "string")) {
+          setTenants(result.tenants);
+          setError("Selecione sua empresa e confirme o acesso.");
+          return;
+        }
+      }
       if (!response.ok) throw Error("Não foi possível autenticar. Verifique suas credenciais e empresa.");
       setPassword("");
       onAuthenticated();
@@ -44,8 +55,10 @@ function LoginForm({ onAuthenticated }: { onAuthenticated: () => void }) {
       onChange={event => setEmail(event.target.value)} /></label>
     <label>Senha <input type="password" autoComplete="current-password" required value={password}
       onChange={event => setPassword(event.target.value)} /></label>
-    <label>Identificador da empresa <input type="text" required value={tenantId}
-      onChange={event => setTenantId(event.target.value)} /></label>
+    {tenants.length > 1 && <label>Empresa <select required value={tenantId}
+      onChange={event => setTenantId(event.target.value)}><option value="">Selecione uma empresa</option>
+      {tenants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+    </select></label>}
     <button type="submit" disabled={busy}>{busy ? "Entrando..." : "Entrar"}</button>
     {error && <p role="alert">{error}</p>}
   </form>;
