@@ -75,3 +75,70 @@ test("integrated HTTP auth API boots CSRF and validates tenant selection", async
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });
+
+test("HTTP login, refresh rotation, authenticated session and logout share one origin", async () => {
+  const calls: string[] = [];
+  const server = createAuthApiServer({
+    supabaseUrl: "https://example.supabase.co", anonKey: "anon",
+    secretKey: "sb_secret_test", tenantSigningKey: "k".repeat(48),
+    publicOrigin: "https://desk.example.test"
+  }, async (url, init) => {
+    const path = String(url);
+    calls.push(path);
+    if (path.includes("grant_type=password")) {
+      return new Response(JSON.stringify({ access_token: "access-before-rotation",
+        refresh_token: "refresh-before-rotation", expires_in: 3600 }), { status: 200 });
+    }
+    if (path.includes("grant_type=refresh_token")) {
+      assert.match(String(init?.body), /refresh-before-rotation/);
+      return new Response(JSON.stringify({ access_token: "access-after-rotation",
+        refresh_token: "refresh-after-rotation", expires_in: 1800 }), { status: 200 });
+    }
+    if (path.includes("/auth/v1/logout")) {
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer access-after-rotation");
+      return new Response(null, { status: 204 });
+    }
+    if (path.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: userId, email: "agent@example.test" }), { status: 200 });
+    }
+    if (path.includes("/rest/v1/users")) {
+      return new Response(JSON.stringify([{ id: userId, tenant_id: tenantId, display_name: "Agent" }]), { status: 200 });
+    }
+    return new Response(JSON.stringify([{ user_id: userId, tenant_id: tenantId, status: "active",
+      roles: { code: "service_agent", tenant_id: tenantId }, tenants: { name: "Company" } }]), { status: 200 });
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const base = "http://127.0.0.1:" + address.port;
+    const csrf = await fetch(base + "/api/auth/csrf");
+    const { csrfToken } = await csrf.json() as { csrfToken: string };
+    const security = { Origin: "https://desk.example.test", "x-csrf-token": csrfToken };
+    const login = await fetch(base + "/api/auth/login", {
+      method: "POST",
+      headers: { ...security, Cookie: "sd-csrf=" + csrfToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "agent@example.test", password: "example-password", tenantId })
+    });
+    assert.equal(login.status, 200);
+    const loginCookies = login.headers.getSetCookie().map(cookie => cookie.split(";")[0]).join("; ");
+    assert.match(loginCookies, /sd-refresh-token=/);
+    const refresh = await fetch(base + "/api/auth/refresh", {
+      method: "POST", headers: { ...security, Cookie: "sd-csrf=" + csrfToken + "; " + loginCookies }
+    });
+    assert.equal(refresh.status, 200);
+    const rotatedCookies = refresh.headers.getSetCookie().map(cookie => cookie.split(";")[0]).join("; ");
+    assert.match(rotatedCookies, /refresh-after-rotation/);
+    const session = await fetch(base + "/api/session", { headers: { Cookie: rotatedCookies } });
+    assert.equal(session.status, 200);
+    assert.equal((await session.json() as { authenticated: boolean }).authenticated, true);
+    const logout = await fetch(base + "/api/auth/logout", {
+      method: "POST", headers: { ...security, Cookie: "sd-csrf=" + csrfToken + "; " + rotatedCookies }
+    });
+    assert.equal(logout.status, 200);
+    assert.ok(logout.headers.getSetCookie().some(cookie => cookie.startsWith("sd-refresh-token=;")));
+    assert.ok(calls.some(path => path.includes("/auth/v1/logout")));
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
