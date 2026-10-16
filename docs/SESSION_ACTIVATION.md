@@ -27,6 +27,7 @@ Rotas:
 - `GET /api/auth/csrf`
 - `POST /api/auth/login`
 - `POST /api/auth/select-tenant`
+- `POST /api/auth/refresh` (rotação explícita, protegida por CSRF e tenant assinado)
 - `GET /api/session`
 - `POST /api/auth/logout`
 
@@ -36,8 +37,11 @@ empresa é assinado e revalidado no backend. A UI não recebe chave privilegiada
 
 ## Restrições e bloqueios antes de produção
 
-1. **Refresh ausente**: o access token expira em até 1 hora; não assumir
-   renovação silenciosa. Implementar refresh seguro com rotação e revogação.
+1. **Renovação parcial**: a API de refresh exige CSRF, cookie de refresh HttpOnly,
+   identidade Supabase e membership ativa; troca o refresh token retornado pelo provedor.
+   A UI ainda não faz renovação automática. A seleção de empresa assinada expira
+   em até uma hora, portanto renovação posterior exige novo login. Não assumir
+   sessão persistente além do período validado.
 2. **Logout remoto ausente**: apaga cookies locais, mas o token previamente
    obtido pode continuar válido no provedor até expirar. Não declarar
    revogação no Supabase.
