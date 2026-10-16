@@ -20,7 +20,7 @@ export function createSupabaseMembershipRepository(baseUrl: string, secretKey: s
     findByUserId: async userId => {
       if (!/^[0-9a-f-]{36}$/.test(userId)) return [];
       const [memberships, users] = await Promise.all([
-        getRows("memberships", { select: "user_id,tenant_id,status,roles!inner(code,tenant_id),tenants!inner(name)", user_id: "eq." + userId, status: "eq.active" }),
+        getRows("memberships", { select: "user_id,tenant_id,status,roles!memberships_role_id_fkey!inner(code,tenant_id),tenants!inner(name)", user_id: "eq." + userId, status: "eq.active" }),
         getRows("users", { select: "id,tenant_id,display_name", id: "eq." + userId })
       ]);
       return memberships.map((value): MembershipRecord => {
@@ -31,7 +31,7 @@ export function createSupabaseMembershipRepository(baseUrl: string, secretKey: s
         const user = users.find(item => {
           if (typeof item !== "object" || !item) return false;
           const entry = item as Record<string, unknown>;
-          return entry.id === userId && entry.tenant_id === row.tenant_id;
+          return entry.id === userId; // Profile tenant is not membership authorization.
         }) as Record<string, unknown> | undefined;
         if (row.user_id !== userId || typeof row.tenant_id !== "string" ||
             typeof role?.code !== "string" || role.tenant_id !== row.tenant_id ||
