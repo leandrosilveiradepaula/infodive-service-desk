@@ -40,3 +40,18 @@ test("refresh refuses invalid provider response and expired credentials", async 
   assert.equal((await rotateSession(config, "old-refresh-token", tenant, async () =>
     new Response(JSON.stringify({ access_token: "new-access-token", expires_in: 1200 }), { status: 200 }))).status, 503);
 });
+
+test("refresh with suspended membership revokes newly issued provider credentials", async () => {
+  let revoked = 0;
+  const bad = { ...config, memberships: { findByUserId: async () => [] } };
+  const result = await rotateSession(bad, "old-refresh-token", tenant, async url => {
+    if (String(url).includes("grant_type=refresh_token")) return new Response(JSON.stringify({
+      access_token: "new-access-token", refresh_token: "new-refresh-token", expires_in: 1200
+    }), { status: 200 });
+    if (String(url).includes("/auth/v1/logout")) { revoked++; return new Response(null, { status: 204 }); }
+    return new Response(JSON.stringify({ id, email: "agent@example.test" }), { status: 200 });
+  });
+  assert.equal(result.status, 403);
+  assert.equal(revoked, 1);
+  assert.equal(result.token, undefined);
+});
