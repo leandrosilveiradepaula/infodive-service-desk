@@ -39,12 +39,14 @@ empresa é assinado e revalidado no backend. A UI não recebe chave privilegiada
 
 1. **Renovação parcial**: a API de refresh exige CSRF, cookie de refresh HttpOnly,
    identidade Supabase e membership ativa; troca o refresh token retornado pelo provedor.
-   A UI ainda não faz renovação automática. A seleção de empresa assinada expira
-   em até uma hora, portanto renovação posterior exige novo login. Não assumir
-   sessão persistente além do período validado.
-2. **Logout remoto ausente**: apaga cookies locais, mas o token previamente
-   obtido pode continuar válido no provedor até expirar. Não declarar
-   revogação no Supabase.
+   A UI tenta renovar enquanto a página autenticada permanece aberta, a cada
+   25 minutos; fechar ou suspender a aba além de uma hora pode exigir novo login.
+   A seleção de empresa assinada expira em até uma hora; não assumir sessão
+   persistente além desse período sem renovação efetivamente concluída.
+2. **Logout remoto condicionado ao provedor**: chama o endpoint de logout local
+   do Supabase e limpa cookies mesmo se o provedor falhar (HTTP 503 explícito).
+   Mesmo após revogar refresh tokens, JWTs já emitidos permanecem válidos
+   até expirar. É necessário validar esse comportamento em E2E real.
 3. **Teste real pendente**: mocks de HTTP não equivalem a login autenticado
    na instância de destino; validar indisponibilidade, CSRF, expiração,
    múltiplas empresas e autorização em E2E real.
