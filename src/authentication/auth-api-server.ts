@@ -73,7 +73,13 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
           send(result.status, { ok: false }); return;
         }
         if (!result.selectedTenantId) {
-          send(409, { ok: false, code: "tenant_selection_required", tenants: result.tenants }); return;
+          // A password grant created a Supabase session. Revoke this provisional
+          // session rather than leaving an untracked refresh token active.
+          const revoked = await revokeCurrentSession(config.supabaseUrl, config.anonKey,
+            "sd-access-token=" + encodeURIComponent(result.token), request);
+          if (revoked !== "revoked") { send(503, { ok: false }); return; }
+          send(409, { ok: false, code: "tenant_selection_required", tenants: result.tenants });
+          return;
         }
         const selection = signTenantSelection(result.userId, result.selectedTenantId,
           Date.now() + result.expiresIn * 1000, config.tenantSigningKey);
