@@ -13,7 +13,7 @@ const input = { email: "agent@example.test", password: "example-password", tenan
 test("credential exchange verifies token against identity and membership", async () => {
   const result = await exchangeCredentials(config, input, async url => {
     if (String(url).includes("/auth/v1/token")) return new Response(JSON.stringify({
-      access_token: "verified-token", expires_in: 7200
+      access_token: "verified-token", refresh_token: "mock-refresh-only", expires_in: 7200
     }), { status: 200 });
     return new Response(JSON.stringify({ id: userId, email: input.email }), { status: 200 });
   });
@@ -27,7 +27,7 @@ test("credential exchange rejects invalid credentials and foreign tenant", async
   const foreign = await exchangeCredentials(config, { ...input,
     tenantId: "33333333-3333-4333-8333-333333333333"
   }, async url => new Response(JSON.stringify(String(url).includes("/auth/v1/token")
-    ? { access_token: "verified-token", expires_in: 3600 }
+    ? { access_token: "verified-token", refresh_token: "mock-refresh-only", expires_in: 3600 }
     : { id: userId, email: input.email }), { status: 200 }));
   assert.equal(foreign.status, 403);
 });
@@ -42,7 +42,7 @@ test("login refuses unrecognized roles and incomplete membership even with valid
       roleCode: "service_agent", membershipStatus: "active" }]
   };
   const mock = async (url: URL | RequestInfo) => new Response(JSON.stringify(String(url).includes("/auth/v1/token")
-    ? { access_token: "verified-token", expires_in: 3600 }
+    ? { access_token: "verified-token", refresh_token: "mock-refresh-only", expires_in: 3600 }
     : { id: userId, email: input.email }), { status: 200 });
   assert.equal((await exchangeCredentials({ ...config, memberships: foreignRoles }, input, mock)).status, 403);
   assert.equal((await exchangeCredentials({ ...config, memberships: incompleteProfile }, input, mock)).status, 403);
