@@ -12,9 +12,10 @@ test("full HTTP session verifies Supabase identity, active membership and signed
     tenantSigningKey: key
   }, async (url) => {
     if (String(url).includes("/auth/v1/user")) return new Response(JSON.stringify({ id: userId, email: "a@example.invalid" }), { status: 200 });
+    if (String(url).includes("/rest/v1/users")) return new Response(JSON.stringify([{ id: userId, tenant_id: tenantId, display_name: "Agent" }]), { status: 200 });
     return new Response(JSON.stringify([{
       user_id: userId, tenant_id: tenantId, status: "active",
-      roles: { code: "service_agent" }, tenants: { name: "Infodive" },
+      roles: { code: "service_agent", tenant_id: tenantId }, tenants: { name: "Infodive" },
       users: { display_name: "Agent" }
     }]), { status: 200 });
   });
