@@ -1,16 +1,36 @@
-# Service Desk session activation (not yet live)
+# Session activation and security boundary
 
-The browser session contract is intentionally fail-closed. It fetches GET /api/session
-with same-origin credentials and no-store; network errors, non-200 HTTP status,
-malformed payloads and unauthenticated responses all resolve to no profile.
+Status: **not deployed**. The UI requests `GET /api/session` using same-origin credentials
+and no-store. The transport-neutral HTTP handler in
+`src/authentication/session-http.ts` delegates to
+`src/authentication/server-session.ts`.
 
-**This commit does not implement or expose an authentication endpoint.**
-Before wiring this contract to the UI, implement a same-origin server endpoint
-that validates a real Supabase Auth session server-side, resolves active membership,
-tenant and roles from privileged server-side queries, and returns only public profile
-fields. Enforce RLS and authorization again on every protected server operation.
-Never accept a browser-submitted userId, tenantId or role as authentication proof.
-Never expose Supabase service-role credentials to the browser.
+## Required production integration
 
-Release gates: verify authenticated browser navigation, logout, expiration,
-cross-tenant rejection, CSP/cookies, preview evidence and explicit human release.
+1. Mount the route at the same origin as the UI. Accept only GET and never cache
+   its response. Configure CSRF protection for any future mutating routes.
+2. Verify the authenticated user with Supabase Auth **on the server** using the
+   authenticated session's real cookie/token and provider verification. Never
+   decode an unsigned client claim into an identity.
+3. Resolve membership from the database using the verified `auth.users.id`.
+   Require `memberships.status = 'active'`, join `roles` by both role id and
+   tenant id, and join `tenants` for display name. Never trust client roles.
+4. Select tenant context using a separately verified membership. For users with
+   multiple active tenants, do not silently choose the first tenant: require
+   an explicit, authenticated tenant selection and revalidate it server-side.
+5. Map only the six supported role codes to the public session response. Deny
+   inactive membership, missing tenant, invalid roles and provider failures.
+6. Authorize every protected command server-side, with tenant-scoped queries
+   and RLS. A successful session response is **not** permission to access any
+   tenant's records.
+7. Implement secure logout and session revocation, expiration handling,
+   cookie attributes, CSP and end-to-end browser validation before release.
+
+## Explicitly unfinished
+
+No Supabase Auth adapter, database adapter, deployed HTTP server, session cookie
+issuer, tenant-selection endpoint, logout handler or browser E2E exists yet.
+The TypeScript modules are testable contracts, **not** a live login system.
+
+Never embed `SUPABASE_SECRET_KEY`, service-role credentials or cross-repository
+tokens in browser code. No migration, preview or production deployment is implied.
