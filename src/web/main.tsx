@@ -80,6 +80,31 @@ function Application() {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [revision]);
+  useEffect(() => {
+    if (!profile) return;
+    let active = true;
+    const renew = async () => {
+      try {
+        const csrf = await fetch("/api/auth/csrf", { credentials: "same-origin", cache: "no-store" });
+        if (!csrf.ok) throw Error("CSRF bootstrap failed");
+        const body: unknown = await csrf.json();
+        const token = typeof body === "object" && body !== null && "csrfToken" in body
+          ? (body as { csrfToken?: unknown }).csrfToken : null;
+        if (typeof token !== "string") throw Error("Invalid CSRF token");
+        const refreshed = await fetch("/api/auth/refresh", {
+          method: "POST", credentials: "same-origin", cache: "no-store",
+          headers: { "x-csrf-token": token }
+        });
+        if (!refreshed.ok) throw Error("Session refresh rejected");
+        if (active) setRevision(previous => previous + 1);
+      } catch {
+        if (active) setProfile(null);
+      }
+    };
+    // Refresh before the one-hour tenant signature expires. No token enters JS.
+    const timer = window.setInterval(() => { void renew(); }, 25 * 60 * 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [profile]);
   return <AuthenticationProvider profile={profile}>
     <AppShell pageTitle="Início" currentPath="/">
       {loading ? <p>Verificando sessão...</p> :
