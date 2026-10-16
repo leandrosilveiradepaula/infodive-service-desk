@@ -170,3 +170,55 @@ test("invalid signed tenant context cannot consume a one-time Supabase refresh t
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });
+
+test("multi-company discovery revokes provisional session before returning authorized choices", async () => {
+  let revoked = 0;
+  const alternate = "33333333-3333-4333-8333-333333333333";
+  const server = createAuthApiServer({
+    supabaseUrl: "https://example.supabase.co", anonKey: "anon",
+    secretKey: "sb_secret_test", tenantSigningKey: "k".repeat(48),
+    publicOrigin: "https://desk.example.test"
+  }, async (url, init) => {
+    const path = String(url);
+    if (path.includes("/auth/v1/logout")) {
+      revoked++;
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer verified-access-token");
+      return new Response(null, { status: 204 });
+    }
+    if (path.includes("/auth/v1/token")) return new Response(JSON.stringify({
+      access_token: "verified-access-token", refresh_token: "verified-refresh-token", expires_in: 1800
+    }), { status: 200 });
+    if (path.includes("/auth/v1/user")) return new Response(JSON.stringify({
+      id: userId, email: "agent@example.test"
+    }), { status: 200 });
+    if (path.includes("/rest/v1/users")) return new Response(JSON.stringify([
+      { id: userId, tenant_id: tenantId, display_name: "Agent" }
+    ]), { status: 200 });
+    return new Response(JSON.stringify([tenantId, alternate].map((id, index) => ({
+      user_id: userId, tenant_id: id, status: "active",
+      roles: { code: "requester", tenant_id: id }, tenants: { name: "Company " + index }
+    }))), { status: 200 });
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const base = "http://127.0.0.1:" + address.port;
+    const csrf = await fetch(base + "/api/auth/csrf");
+    const { csrfToken } = await csrf.json() as { csrfToken: string };
+    const response = await fetch(base + "/api/auth/login", {
+      method: "POST",
+      headers: { Origin: "https://desk.example.test", "x-csrf-token": csrfToken,
+        Cookie: "sd-csrf=" + csrfToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "agent@example.test", password: "password", tenantId: "" })
+    });
+    assert.equal(response.status, 409);
+    const payload = await response.json() as { code: string; tenants: unknown[] };
+    assert.equal(payload.code, "tenant_selection_required");
+    assert.equal(payload.tenants.length, 2);
+    assert.equal(revoked, 1);
+    assert.equal(response.headers.get("set-cookie"), null);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
