@@ -26,3 +26,7 @@ for script in \
 done
 psql -X -w -v ON_ERROR_STOP=1 -f tests/security/two_tenant_isolation.sql
 echo "ISOLATED_POSTGRES_RLS_PASS=1"
+# QA fixture has no display_name by design; add one for the REST adapter test.
+psql -X -w -v ON_ERROR_STOP=1 -c \
+  "update public.users set display_name='QA User A' where id='10000000-0000-4000-8000-000000000011'" >/dev/null
+bash tests/security/run_postgrest_contract.sh
