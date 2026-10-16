@@ -139,4 +139,97 @@ select public.qa_reject($q$insert into public.delegated_access_audit_log
 values ('10000000-0000-4000-8000-000000000099','10000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000011','ticket','read','Client-forged delegated audit event')$q$,'authenticated audit insert denied');
 reset role;
 
+
+-- Delegation: prove a VALID grant allows A but not B, client audit forgery
+-- cannot use that valid FK, then revocation removes the authorized scope.
+insert into auth.users(id) values ('10000000-0000-4000-8000-000000000033');
+insert into public.role_permissions(role_id,permission_id)
+select '30000000-0000-4000-8000-000000000001',id from public.permissions
+where (resource,action) in (('client_company','read'),('ticket','read'));
+insert into public.operational_links(id,tenant_id,client_company_id,platform_user_id)
+values ('90000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000001',
+'40000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000033');
+insert into public.delegated_access_grants
+(id,operational_link_id,tenant_id,client_company_id,platform_user_id,role_id,justification)
+values ('91000000-0000-4000-8000-000000000001',
+'90000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000001',
+'40000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000033',
+'30000000-0000-4000-8000-000000000001',
+'Explicit authorized QA platform access');
+insert into public.delegated_access_audit_log
+(delegated_access_grant_id,tenant_id,client_company_id,actor_user_id,resource,action,justification)
+values ('91000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000001',
+'40000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000033',
+'ticket','read','Privileged authorized QA audit');
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000033',false);
+do $$
+begin
+  if not public.has_delegated_company_permission(
+    '10000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000001',
+    'client_company','read') then
+    raise exception 'Valid delegate is not authorized for A';
+  end if;
+  if public.has_delegated_company_permission(
+    '10000000-0000-4000-8000-000000000002',
+    '40000000-0000-4000-8000-000000000002',
+    'client_company','read') or (select count(*) from public.client_companies) <> 1 then
+    raise exception 'Delegate can see more than company A';
+  end if;
+end $$;
+select public.qa_reject($q$insert into public.delegated_access_audit_log
+(delegated_access_grant_id,tenant_id,client_company_id,actor_user_id,resource,action,justification)
+values ('91000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000001',
+'40000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000033',
+'ticket','read','Forged authenticated client audit')$q$,
+'client cannot forge audit against a real grant');
+reset role;
+update public.delegated_access_grants set enabled=false,revoked_at=now()
+where id='91000000-0000-4000-8000-000000000001';
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000033',false);
+do $$
+begin
+  if public.has_delegated_company_permission(
+    '10000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000001',
+    'client_company','read') or (select count(*) from public.client_companies) <> 0 then
+    raise exception 'Revoked delegation still has access';
+  end if;
+end $$;
+reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000022',false);
+do $$
+begin
+  if (select count(*) from public.tenants) <> 1
+     or (select count(*) from public.client_companies) <> 1 then
+    raise exception 'Tenant B row isolation incorrect';
+  end if;
+end $$;
+reset role;
+update public.memberships set status='suspended'
+where user_id='10000000-0000-4000-8000-000000000011';
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000011',false);
+do $$
+begin
+  if (select count(*) from public.tenants) <> 0
+     or (select count(*) from public.client_companies) <> 0 then
+    raise exception 'Suspended tenant A membership still has access';
+  end if;
+end $$;
+reset role;
+
 select 'TWO_TENANT_RLS_FK_PASS' as result;
