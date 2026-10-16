@@ -11,6 +11,7 @@ export async function exchangeCredentials(
   request: typeof fetch
 ): Promise<{ status: number; token?: string; userId?: string; expiresIn?: number; refreshToken?: string;
   selectedTenantId?: string; tenants?: readonly AvailableTenant[] }> {
+  let unclaimedToken: string | null = null;
   if (!input.email || input.email.length > 254 || !input.password ||
       input.password.length > 1024 ||
       (input.tenantId !== "" && !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(input.tenantId))) return { status: 400 };
@@ -30,6 +31,7 @@ export async function exchangeCredentials(
     if (typeof values.refresh_token !== "string" || values.refresh_token.length < 10 ||
         values.refresh_token.length > 8192) return { status: 503 };
     const token = values.access_token;
+    unclaimedToken = token;
     const provider = createSupabaseIdentityProvider(config.supabaseUrl, config.anonKey, extractAccessToken, request);
     // A password grant creates a provider session even when local authorization fails.
     // Revoke abandoned sessions rather than leave untracked refresh grants active.
@@ -61,5 +63,9 @@ export async function exchangeCredentials(
     if (selectedTenantId && !choices.has(selectedTenantId)) return rejectedGrant(403);
     return { status: 200, token, refreshToken: values.refresh_token, userId: identity.userId,
       expiresIn: Math.min(Math.floor(values.expires_in), 3600), selectedTenantId, tenants };
-  } catch { return { status: 503 }; }
+  } catch {
+    if (unclaimedToken) await revokeCurrentSession(config.supabaseUrl, config.anonKey,
+      "sd-access-token=" + encodeURIComponent(unclaimedToken), request);
+    return { status: 503 };
+  }
 }
