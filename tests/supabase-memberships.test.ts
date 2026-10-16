@@ -22,3 +22,24 @@ test("membership repository fails closed when database is unavailable", async ()
     async () => new Response("unavailable", { status: 503 }));
   await assert.rejects(repository.findByUserId(userId), /Supabase lookup failed/);
 });
+
+test("PostgREST explicit role FK and secondary tenant membership are supported", async () => {
+  const seen: string[] = [];
+  const repository = createSupabaseMembershipRepository("https://example.supabase.co", "sb_secret_test", async (url, init) => {
+    seen.push(String(url));
+    assert.equal((init.headers as Record<string, string>).Authorization, undefined);
+    if (String(url).includes("/users")) return new Response(JSON.stringify([
+      { id: userId, tenant_id: tenantId, display_name: "Agent" }
+    ]), { status: 200 });
+    return new Response(JSON.stringify([{
+      user_id: userId, tenant_id: "33333333-3333-4333-8333-333333333333",
+      status: "active", roles: { code: "requester", tenant_id: "33333333-3333-4333-8333-333333333333" },
+      tenants: { name: "Secondary Tenant" }
+    }]), { status: 200 });
+  });
+  const rows = await repository.findByUserId(userId);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.tenantName, "Secondary Tenant");
+  assert.equal(rows[0]?.displayName, "Agent");
+  assert.ok(seen.some(url => decodeURIComponent(url).includes("roles!memberships_role_id_fkey!inner")));
+});
