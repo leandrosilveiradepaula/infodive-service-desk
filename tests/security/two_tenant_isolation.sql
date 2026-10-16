@@ -241,7 +241,7 @@ insert into public.memberships(tenant_id,user_id,role_id) values
  '30000000-0000-4000-8000-000000000002');
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000011',false);
-do $
+do $$
 begin
   if (select count(*) from public.tenants) <> 1
      or (select count(*) from public.tenants where slug='qa-b') <> 1
@@ -249,12 +249,12 @@ begin
      or (select count(*) from public.client_companies where name='Company A') <> 0 then
     raise exception 'Cross-tenant membership incorrectly follows primary profile or suspended A';
   end if;
-end $;
+end $$;
 reset role;
 
 -- PostgREST embeds in PR #3 explicitly select the original memberships role
 -- FK because this schema also introduces an integrity-enforcing composite FK.
-do $
+do $$
 begin
   if not exists (select 1 from pg_constraint
                  where conrelid='public.memberships'::regclass
@@ -264,7 +264,7 @@ begin
                       and conname='memberships_role_tenant_fk') then
     raise exception 'Membership role relationship contract for PostgREST is missing';
   end if;
-end $;
+end $$;
 
 -- Internal SECURITY DEFINER functions are never public/browser RPC endpoints.
 do $$
