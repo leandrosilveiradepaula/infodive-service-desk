@@ -34,3 +34,25 @@ test("tenant authorization remains bound to actual session and membership", () =
   assert.match(sql, /membership\.user_id = auth\.uid\(\)/);
   assert.doesNotMatch(sql, /raw_user_meta_data|user_metadata/i);
 });
+
+
+test("later domain migrations enforce the same tenant in linked records", () => {
+  const knowledge = readFileSync("../supabase/migrations/20261015000400_knowledge_base.sql", "utf8");
+  const tickets = readFileSync("../supabase/migrations/20261015000500_ticket_domain.sql", "utf8");
+  const sla = readFileSync("../supabase/migrations/20261015000600_contracts_sla_domain.sql", "utf8");
+
+  assert.match(knowledge, /ticket\.id = new\.ticket_id and ticket\.tenant_id = new\.tenant_id/);
+  assert.match(tickets, /resource_id = new\.ticket_id/);
+  for (const trigger of [
+    "contract_services_validate_scope", "sla_rule_versions_validate_scope",
+    "contract_time_consumption_validate_scope"
+  ]) assert.ok(sla.includes(trigger), trigger);
+  assert.match(sla, /rule\.contract_id = new\.contract_id/);
+  assert.match(sla, /entry\.contract_id = new\.contract_id/);
+  assert.match(sla, /rule\.id = new\.rule_version_id and rule\.tenant_id = new\.tenant_id/);
+});
+
+test("delegated audit events cannot be submitted through the authenticated Data API", () => {
+  assert.doesNotMatch(sql, /create policy delegated_access_audit_insert/);
+  assert.match(sql, /create policy delegated_access_audit_select/);
+});
