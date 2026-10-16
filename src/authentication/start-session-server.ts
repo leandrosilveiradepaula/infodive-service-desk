@@ -1,4 +1,4 @@
-import { createConfiguredSessionServer } from "./configured-session-server";
+import { createAuthApiServer } from "./auth-api-server";
 
 const required = (name: string): string => {
   const value = process.env[name];
@@ -8,11 +8,12 @@ const required = (name: string): string => {
 export function startSessionServer() {
   const port = Number(required("PORT"));
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error("Invalid PORT");
-  const server = createConfiguredSessionServer({
+  const server = createAuthApiServer({
     supabaseUrl: required("SERVICE_DESK_SUPABASE_URL"),
     anonKey: required("SERVICE_DESK_SUPABASE_ANON_KEY"),
     secretKey: required("SERVICE_DESK_SUPABASE_SECRET_KEY"),
-    tenantSigningKey: required("SERVICE_DESK_TENANT_SIGNING_KEY")
+    tenantSigningKey: required("SERVICE_DESK_TENANT_SIGNING_KEY"),
+    publicOrigin: required("SERVICE_DESK_PUBLIC_ORIGIN")
   });
   return server.listen(port, "127.0.0.1");
 }
