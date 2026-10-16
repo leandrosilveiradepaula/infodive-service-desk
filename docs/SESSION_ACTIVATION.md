@@ -28,9 +28,11 @@ and no-store. The transport-neutral HTTP handler in
 
 ## Explicitly unfinished
 
-No Supabase Auth adapter, database adapter, deployed HTTP server, session cookie
-issuer, tenant-selection endpoint, logout handler or browser E2E exists yet.
-The TypeScript modules are testable contracts, **not** a live login system.
+Supabase Auth identity verification, membership database adapter, and a localhost HTTP
+session server are implemented and were validated in Factory QA run 38955363511.
+A deployed same-origin HTTP server, secure session cookie issuer, tenant-selection
+endpoint, logout handler and browser E2E do not exist yet. The implemented
+verification modules are **not** a live login system.
 
 Never embed `SUPABASE_SECRET_KEY`, service-role credentials or cross-repository
 tokens in browser code. No migration, preview or production deployment is implied.
