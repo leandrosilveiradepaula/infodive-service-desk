@@ -72,7 +72,10 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
         if (result.status !== 200 || !result.token || !result.refreshToken || !result.userId || !result.expiresIn) {
           send(result.status, { ok: false }); return;
         }
-        const selection = signTenantSelection(result.userId, payload.tenantId as string,
+        if (!result.selectedTenantId) {
+          send(409, { ok: false, code: "tenant_selection_required", tenants: result.tenants }); return;
+        }
+        const selection = signTenantSelection(result.userId, result.selectedTenantId,
           Date.now() + result.expiresIn * 1000, config.tenantSigningKey);
         send(200, { ok: true }, { "Set-Cookie": issueAuthCookies(result.token, result.refreshToken,
           selection, result.expiresIn) });
