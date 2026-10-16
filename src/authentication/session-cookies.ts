@@ -11,30 +11,44 @@ export function extractAccessToken(headers: Readonly<Record<string, string | und
   return token && token.length <= 8192 ? token : null;
 }
 /** Signed tenant selection is bound to the verified Supabase user ID. */
-export function verifyTenantSelection(
-  cookie: string | undefined, userId: string, signingKey: string
-): string | null {
+const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
+
+/** Verify the tenant HMAC *before* consuming a single-use refresh token. */
+export function readSignedTenantSelection(
+  cookie: string | undefined, signingKey: string
+): { userId: string; tenantId: string } | null {
   if (signingKey.length < 32) return null;
   const value = cookieValue(cookie, "sd-tenant-selection");
   if (!value) return null;
-  const match = /^([0-9a-f-]{36})\.([0-9]{10,13})\.([0-9a-f]{64})$/.exec(value);
+  const match = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.([0-9]{13})\.([0-9a-f]{64})$/.exec(value);
   if (!match) return null;
-  const [, tenantId, expires, signature] = match;
-  if (!tenantId || !expires || !signature || !Number.isSafeInteger(Number(expires)) ||
-      Number(expires) <= Date.now() || Number(expires) > Date.now() + 3600000) return null;
-  const message = userId + "." + tenantId + "." + expires;
-  const expected = createHmac("sha256", signingKey).update(message).digest();
+  const [, userId, tenantId, expires, signature] = match;
+  if (!userId || !tenantId || !expires || !signature ||
+      !uuidPattern.test(userId) || !uuidPattern.test(tenantId)) return null;
+  const expiry = Number(expires);
+  const now = Date.now();
+  if (!Number.isSafeInteger(expiry) || expiry <= now || expiry > now + 3600000) return null;
+  const expected = createHmac("sha256", signingKey)
+    .update(userId + "." + tenantId + "." + expires).digest();
   const actual = Buffer.from(signature, "hex");
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
-  return tenantId;
+  return { userId, tenantId };
+}
+export function verifyTenantSelection(
+  cookie: string | undefined, userId: string, signingKey: string
+): string | null {
+  const selection = readSignedTenantSelection(cookie, signingKey);
+  return selection?.userId === userId ? selection.tenantId : null;
 }
 export function signTenantSelection(userId: string, tenantId: string, expiresAt: number, key: string): string {
-  if (key.length < 32 || !/^[0-9a-f-]{36}$/.test(tenantId) || !userId.trim() ||
-      !Number.isSafeInteger(expiresAt) || expiresAt <= Date.now() ||
-      expiresAt > Date.now() + 3600000) throw Error("Invalid tenant selection");
+  const now = Date.now();
+  if (key.length < 32 || !uuidPattern.test(userId) || !uuidPattern.test(tenantId) ||
+      !Number.isSafeInteger(expiresAt) || expiresAt <= now || expiresAt > now + 3600000)
+    throw Error("Invalid tenant selection");
   const expires = String(expiresAt);
-  const signature = createHmac("sha256", key).update(userId + "." + tenantId + "." + expires).digest("hex");
-  return tenantId + "." + expires + "." + signature;
+  const signature = createHmac("sha256", key)
+    .update(userId + "." + tenantId + "." + expires).digest("hex");
+  return userId + "." + tenantId + "." + expires + "." + signature;
 }
 
 /** The refresh and tenant cookies are bounded to one hour, not permanent browser storage. */
