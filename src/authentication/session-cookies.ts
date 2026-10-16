@@ -36,7 +36,7 @@ export function signTenantSelection(userId: string, tenantId: string, expiresAt:
 }
 
 /** The refresh and tenant cookies are bounded to seven days, not permanent browser storage. */
-export const SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+export const SESSION_COOKIE_MAX_AGE = 3600;
 export function extractRefreshToken(header: string | undefined): string | null {
   const value = cookieValue(header, "sd-refresh-token");
   return value && value.length >= 10 && value.length <= 8192 ? value : null;
