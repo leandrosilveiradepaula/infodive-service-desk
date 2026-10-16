@@ -47,3 +47,25 @@ test("login refuses unrecognized roles and incomplete membership even with valid
   assert.equal((await exchangeCredentials({ ...config, memberships: foreignRoles }, input, mock)).status, 403);
   assert.equal((await exchangeCredentials({ ...config, memberships: incompleteProfile }, input, mock)).status, 403);
 });
+
+test("after authentication, one tenant is automatic and multiple require explicit selection", async () => {
+  const mock = async (url: URL | RequestInfo) => new Response(JSON.stringify(String(url).includes("/auth/v1/token")
+    ? { access_token: "verified-token", refresh_token: "mock-refresh-only", expires_in: 3600 }
+    : { id: userId, email: input.email }), { status: 200 });
+  const single = await exchangeCredentials(config, { ...input, tenantId: "" }, mock);
+  assert.equal(single.status, 200);
+  assert.equal(single.selectedTenantId, tenantId);
+  const second = "33333333-3333-4333-8333-333333333333";
+  const multiple: MembershipRepository = { findByUserId: async () => [
+    ...await memberships.findByUserId(userId),
+    { userId, tenantId: second, tenantName: "Second Company", displayName: "Agent",
+      roleCode: "requester", membershipStatus: "active" }
+  ] };
+  const choice = await exchangeCredentials({ ...config, memberships: multiple }, { ...input, tenantId: "" }, mock);
+  assert.equal(choice.status, 200);
+  assert.equal(choice.selectedTenantId, undefined);
+  assert.deepEqual(choice.tenants?.map(t => t.id).sort(), [tenantId, second].sort());
+  const selected = await exchangeCredentials({ ...config, memberships: multiple },
+    { ...input, tenantId: second }, mock);
+  assert.equal(selected.selectedTenantId, second);
+});
