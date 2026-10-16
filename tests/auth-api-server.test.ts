@@ -41,9 +41,11 @@ test("integrated HTTP auth API boots CSRF and validates tenant selection", async
     });
     assert.equal(denied.status, 403);
     const logout = await fetch(base + "/api/auth/logout", {
-      method: "POST", headers: { Origin: "https://desk.example.test" }
+      method: "POST", headers: { Origin: "https://desk.example.test", Cookie: "sd-csrf=" + token, "x-csrf-token": token }
     });
     assert.equal(logout.status, 200);
+    const rejectedLogout = await fetch(base + "/api/auth/logout", { method: "POST", headers: { Origin: "https://desk.example.test" } });
+    assert.equal(rejectedLogout.status, 403);
   } finally {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
