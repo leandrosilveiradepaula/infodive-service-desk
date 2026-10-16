@@ -48,7 +48,7 @@ end $$;
 reset role;
 set role anon;
 select set_config('request.jwt.claim.sub','',false);
-do $
+do $$
 declare
  visible_count integer;
  read_denied boolean := false;
@@ -67,7 +67,7 @@ begin
   if has_function_privilege('anon','public.is_active_tenant_member(uuid)','EXECUTE') then
     raise exception 'Anonymous role can execute tenant membership helper';
   end if;
-end $;
+end $$;
 reset role;
 
 -- Next-domain FKs and triggers: a privileged write must never create a
@@ -122,12 +122,12 @@ values ('10000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-00000000
 -- Validate policy behavior with real SELECT privileges (RLS, not missing GRANT).
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000011',false);
-do $
+do $$
 begin
  if (select count(*) from public.tickets) <> 0 then
    raise exception 'Tenant A cannot see a ticket without explicit ticket permission';
  end if;
-end $;
+end $$;
 reset role;
 
 -- Delegated audit events must be server-originated, not forged by an
