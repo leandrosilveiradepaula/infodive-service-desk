@@ -9,6 +9,8 @@ test("integrated HTTP auth API boots CSRF and validates tenant selection", async
     secretKey: "sb_secret_test", tenantSigningKey: "k".repeat(48),
     publicOrigin: "https://desk.example.test"
   }, async (url) => {
+    if (String(url).includes("/auth/v1/token"))
+      return new Response(JSON.stringify({ access_token: "verified-token", expires_in: 3600 }), { status: 200 });
     if (String(url).includes("/auth/v1/user"))
       return new Response(JSON.stringify({ id: userId, email: "user@example.test" }), { status: 200 });
     if (String(url).includes("/rest/v1/users"))
@@ -35,6 +37,19 @@ test("integrated HTTP auth API boots CSRF and validates tenant selection", async
     });
     assert.equal(result.status, 200);
     assert.match(result.headers.get("set-cookie") ?? "", /sd-tenant-selection=/);
+    const login = await fetch(base + "/api/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json",
+        Origin: "https://desk.example.test", Cookie: "sd-csrf=" + token,
+        "x-csrf-token": token },
+      body: JSON.stringify({ email: "agent@example.test", password: "example-password", tenantId })
+    });
+    assert.equal(login.status, 200);
+    assert.match(login.headers.get("set-cookie") ?? "", /sd-access-token=/);
+    const invalidLogin = await fetch(base + "/api/auth/login", {
+      method: "POST", headers: { Origin: "https://desk.example.test" },
+      body: JSON.stringify({ email: "agent@example.test", password: "example-password", tenantId })
+    });
+    assert.equal(invalidLogin.status, 403);
     const denied = await fetch(base + "/api/auth/select-tenant", {
       method: "POST", headers: { Origin: "https://attacker.example.test" },
       body: JSON.stringify({ tenantId })
