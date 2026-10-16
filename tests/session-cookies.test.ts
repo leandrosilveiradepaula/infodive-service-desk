@@ -10,7 +10,7 @@ test("tenant selection is bound to identity, expiry and signature", () => {
   assert.equal(verifyTenantSelection(cookie, user, key), tenant);
   assert.equal(verifyTenantSelection(cookie, "other-user", key), null);
   assert.equal(verifyTenantSelection(cookie, user, "different".repeat(5)), null);
-  assert.equal(verifyTenantSelection(cookie.replace(/.$/, "0"), user, key), null);
+  assert.equal(verifyTenantSelection(cookie.slice(0, -1) + (cookie.endsWith("0") ? "1" : "0"), user, key), null);
   assert.equal(verifyTenantSelection("sd-tenant-selection=invalid", user, key), null);
 });
 test("access token only comes from dedicated session cookie", () => {
