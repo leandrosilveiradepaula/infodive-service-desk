@@ -6,7 +6,9 @@ export function createSupabaseMembershipRepository(baseUrl: string, secretKey: s
     const url = new URL(baseUrl.replace(/\/$/, "") + "/rest/v1/" + path);
     for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
     const response = await request(url.toString(), {
-      method: "GET", headers: { apikey: secretKey, Authorization: "Bearer " + secretKey },
+      method: "GET", headers: secretKey.startsWith("sb_secret_")
+        ? { apikey: secretKey }
+        : { apikey: secretKey, Authorization: "Bearer " + secretKey },
       cache: "no-store", signal: AbortSignal.timeout(8000)
     });
     if (!response.ok) throw Error("Supabase lookup failed");
