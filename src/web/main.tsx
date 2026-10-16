@@ -50,6 +50,25 @@ function LoginForm({ onAuthenticated }: { onAuthenticated: () => void }) {
     {error && <p role="alert">{error}</p>}
   </form>;
 }
+function LogoutButton({ onLogout }: { onLogout: () => void }) {
+  const [busy, setBusy] = useState(false);
+  async function logout() {
+    setBusy(true);
+    try {
+      const csrf = await fetch("/api/auth/csrf", { credentials: "same-origin", cache: "no-store" });
+      if (!csrf.ok) throw Error("CSRF");
+      const payload = await csrf.json() as { csrfToken?: string };
+      if (!payload.csrfToken) throw Error("CSRF");
+      const result = await fetch("/api/auth/logout", {
+        method: "POST", credentials: "same-origin", cache: "no-store",
+        headers: { "x-csrf-token": payload.csrfToken }
+      });
+      if (!result.ok) throw Error("Logout");
+      onLogout();
+    } catch { setBusy(false); }
+  }
+  return <button type="button" disabled={busy} onClick={() => { void logout(); }}>Sair</button>;
+}
 function Application() {
   const [profile, setProfile] = useState<AuthenticatedProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +84,7 @@ function Application() {
     <AppShell pageTitle="Início" currentPath="/">
       {loading ? <p>Verificando sessão...</p> :
        profile === null ? <LoginForm onAuthenticated={() => { setLoading(true); setRevision(value => value + 1); }} /> :
-       <p>Identidade verificada. As permissões continuam sendo aplicadas pelo servidor.</p>}
+       <><p>Identidade verificada. As permissões continuam sendo aplicadas pelo servidor.</p><LogoutButton onLogout={() => { setProfile(null); setRevision(value => value + 1); }} /></>}
     </AppShell>
   </AuthenticationProvider>;
 }
