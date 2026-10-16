@@ -101,3 +101,22 @@ test("failed revocation of unauthorized password grant fails closed", async () =
   assert.equal(result.status, 503);
   assert.equal(result.token, undefined);
 });
+
+test("database outage after password grant revokes its provisional session", async () => {
+  let revocations = 0;
+  const broken: MembershipRepository = { findByUserId: async () => { throw Error("DB outage"); } };
+  const result = await exchangeCredentials({ ...config, memberships: broken }, input, async (url, init) => {
+    if (String(url).includes("grant_type=password")) return new Response(JSON.stringify({
+      access_token: "verified-token", refresh_token: "new-refresh-token", expires_in: 1800
+    }), { status: 200 });
+    if (String(url).includes("/auth/v1/logout")) {
+      revocations++;
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer verified-token");
+      return new Response(null, { status: 204 });
+    }
+    return new Response(JSON.stringify({ id: userId, email: input.email }), { status: 200 });
+  });
+  assert.equal(result.status, 503);
+  assert.equal(result.token, undefined);
+  assert.equal(revocations, 1);
+});
