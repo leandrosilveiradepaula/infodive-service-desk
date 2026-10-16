@@ -10,6 +10,7 @@ export type AuthFetch = (url: string, init: {
   readonly method: "GET";
   readonly headers: Readonly<Record<string, string>>;
   readonly cache: "no-store";
+  readonly signal?: AbortSignal;
 }) => Promise<AuthHttpResponse>;
 /**
  * Validates the opaque bearer token by asking Supabase Auth /user.
@@ -33,7 +34,8 @@ export function createSupabaseIdentityProvider(
       const response = await request(endpoint, {
         method: "GET",
         headers: { apikey: publishableKey, Authorization: "Bearer " + token },
-        cache: "no-store"
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000)
       });
       if (!response.ok || response.status !== 200) return null;
       const payload = await response.json();
