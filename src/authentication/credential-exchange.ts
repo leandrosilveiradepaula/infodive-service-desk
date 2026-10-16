@@ -6,7 +6,7 @@ export async function exchangeCredentials(
   config: { supabaseUrl: string; anonKey: string; memberships: MembershipRepository },
   input: { email: string; password: string; tenantId: string },
   request: typeof fetch
-): Promise<{ status: number; token?: string; userId?: string; expiresIn?: number }> {
+): Promise<{ status: number; token?: string; userId?: string; expiresIn?: number; refreshToken?: string }> {
   if (!input.email || input.email.length > 254 || !input.password ||
       input.password.length > 1024 || !/^[0-9a-f-]{36}$/.test(input.tenantId)) return { status: 400 };
   try {
@@ -22,6 +22,8 @@ export async function exchangeCredentials(
     if (typeof values.access_token !== "string" || values.access_token.length < 10 ||
         values.access_token.length > 8192 || typeof values.expires_in !== "number" ||
         !Number.isFinite(values.expires_in) || values.expires_in < 1) return { status: 503 };
+    if (typeof values.refresh_token !== "string" || values.refresh_token.length < 10 ||
+        values.refresh_token.length > 8192) return { status: 503 };
     const token = values.access_token;
     const provider = createSupabaseIdentityProvider(config.supabaseUrl, config.anonKey, extractAccessToken, request);
     const identity = await provider.verifySession({ cookie: "sd-access-token=" + encodeURIComponent(token) });
@@ -33,6 +35,6 @@ export async function exchangeCredentials(
       "requester", "customer_administrator", "customer_user"]);
     if (!selected.length || !selected.every(row => allowedRoles.has(row.roleCode) &&
       row.tenantName.trim() && row.displayName.trim())) return { status: 403 };
-    return { status: 200, token, userId: identity.userId, expiresIn: Math.min(Math.floor(values.expires_in), 3600) };
+    return { status: 200, token, refreshToken: values.refresh_token, userId: identity.userId, expiresIn: Math.min(Math.floor(values.expires_in), 3600) };
   } catch { return { status: 503 }; }
 }
