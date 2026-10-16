@@ -26,3 +26,11 @@ Não aplicar no Supabase da Factory nem no banco de produção do piloto.
 A branch é isolada; a PR será Draft. O Actions do repositório privado não
 aloca runner (issue #4), portanto o CI real ainda não foi executado.
 O gate humano de merge e release de produção continua obrigatório.
+
+## Correções adicionais (16/10/2026)
+
+- Associação artigo↔chamado agora confere o tenant do ticket, não apenas o artigo.
+- Anexos de tickets devem ter `resource_id` igual ao ticket referido, além de tenant e tipo.
+- Contract services, SLA rule calendars, SLA targets/activities e consumo de horas conferem todos os IDs vinculados sob a mesma identidade do tenant, também para operações privilegiadas.
+- `delegated_access_audit_log` não aceita mais INSERT de clientes autenticados: ações privilegiadas geram registros server-side; usuários não podem forjar eventos usando um grant existente.
+- O QA PostgreSQL real deve provar allow/deny para dois tenants; testes textuais e builds não encerram o gate de segurança. Nenhuma alteração foi aplicada em produção.

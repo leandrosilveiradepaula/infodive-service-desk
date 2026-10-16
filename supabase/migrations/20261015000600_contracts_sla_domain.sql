@@ -144,11 +144,42 @@ begin
   if tg_table_name = 'service_contracts' and not exists (select 1 from public.client_companies where id = new.client_company_id and tenant_id = new.tenant_id) then
     raise exception 'Contract client company must belong to the contract tenant';
   end if;
+  if tg_table_name = 'contract_authorized_services' and not exists (
+    select 1 from public.service_contracts contract
+    join public.ticket_services service on service.id = new.service_id
+      and service.tenant_id = contract.tenant_id
+    where contract.id = new.contract_id
+  ) then
+    raise exception 'Contract authorized service must share the contract tenant';
+  end if;
+  if tg_table_name = 'sla_rule_versions' and not exists (
+    select 1 from public.service_contracts contract
+    join public.sla_calendars calendar on calendar.id = new.calendar_id
+      and calendar.tenant_id = contract.tenant_id
+    where contract.id = new.contract_id and contract.tenant_id = new.tenant_id
+  ) then
+    raise exception 'SLA rule calendar and contract must share one tenant';
+  end if;
   if tg_table_name = 'ticket_sla_targets' and not exists (select 1 from public.tickets where id = new.ticket_id and tenant_id = new.tenant_id) then
     raise exception 'SLA target ticket must belong to its tenant';
   end if;
+  if tg_table_name = 'ticket_sla_targets' and not exists (
+    select 1 from public.sla_rule_versions rule
+    join public.service_contracts contract on contract.id = rule.contract_id
+      and contract.tenant_id = rule.tenant_id
+    where rule.id = new.rule_version_id and rule.tenant_id = new.tenant_id
+      and rule.contract_id = new.contract_id
+  ) then
+    raise exception 'SLA target contract and rule must share the ticket tenant';
+  end if;
   if tg_table_name in ('sla_pauses', 'sla_events') and not exists (select 1 from public.tickets where id = new.ticket_id and tenant_id = new.tenant_id) then
     raise exception 'SLA activity ticket must belong to its tenant';
+  end if;
+  if tg_table_name in ('sla_pauses', 'sla_events') and not exists (
+    select 1 from public.sla_rule_versions
+    where id = new.rule_version_id and tenant_id = new.tenant_id
+  ) then
+    raise exception 'SLA activity rule must belong to the ticket tenant';
   end if;
   if tg_table_name = 'time_entries' and new.ticket_id is not null and not exists (select 1 from public.tickets where id = new.ticket_id and tenant_id = new.tenant_id) then
     raise exception 'Time entry ticket must belong to its tenant';
@@ -156,10 +187,22 @@ begin
   if tg_table_name = 'time_entries' and new.contract_id is not null and not exists (select 1 from public.service_contracts where id = new.contract_id and tenant_id = new.tenant_id) then
     raise exception 'Time entry contract must belong to its tenant';
   end if;
+  if tg_table_name = 'contract_time_consumption' and not exists (
+    select 1 from public.time_entries entry
+    join public.service_contracts contract on contract.id = new.contract_id
+      and contract.tenant_id = new.tenant_id
+    where entry.id = new.time_entry_id and entry.tenant_id = new.tenant_id
+      and entry.contract_id = new.contract_id
+  ) then
+    raise exception 'Time consumption must match the entry tenant and contract';
+  end if;
   return new;
 end;
 $$;
 create trigger service_contracts_validate_scope before insert or update on public.service_contracts for each row execute function public.validate_contract_sla_scope();
+create trigger contract_services_validate_scope before insert or update on public.contract_authorized_services for each row execute function public.validate_contract_sla_scope();
+create trigger sla_rule_versions_validate_scope before insert or update on public.sla_rule_versions for each row execute function public.validate_contract_sla_scope();
+create trigger contract_time_consumption_validate_scope before insert or update on public.contract_time_consumption for each row execute function public.validate_contract_sla_scope();
 create trigger ticket_sla_targets_validate_scope before insert or update on public.ticket_sla_targets for each row execute function public.validate_contract_sla_scope();
 create trigger sla_pauses_validate_scope before insert or update on public.sla_pauses for each row execute function public.validate_contract_sla_scope();
 create trigger sla_events_validate_scope before insert or update on public.sla_events for each row execute function public.validate_contract_sla_scope();

@@ -379,7 +379,8 @@ set search_path = public
 as $$
 begin
   if not exists (select 1 from public.tickets where id = new.ticket_id and tenant_id = new.tenant_id)
-     or not exists (select 1 from public.attachments where id = new.attachment_id and tenant_id = new.tenant_id and resource_type = 'ticket') then
+     or not exists (select 1 from public.attachments where id = new.attachment_id and tenant_id = new.tenant_id
+          and resource_type = 'ticket' and resource_id = new.ticket_id) then
     raise exception 'Ticket attachments must be ticket resources in the same tenant';
   end if;
   return new;

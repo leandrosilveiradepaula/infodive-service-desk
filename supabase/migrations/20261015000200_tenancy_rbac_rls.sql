@@ -370,17 +370,7 @@ create policy delegated_access_grants_manage on public.delegated_access_grants f
 
 create policy delegated_access_audit_select on public.delegated_access_audit_log for select
   using (public.has_tenant_permission(tenant_id, 'delegated_access', 'manage'));
-create policy delegated_access_audit_insert on public.delegated_access_audit_log for insert
-  with check (
-    actor_user_id = auth.uid()
-    and exists (
-      select 1 from public.delegated_access_grants grant_access
-      where grant_access.id = delegated_access_grant_id
-        and grant_access.tenant_id = tenant_id
-        and grant_access.client_company_id = client_company_id
-        and grant_access.platform_user_id = actor_user_id
-        and grant_access.enabled
-        and grant_access.revoked_at is null
-        and (grant_access.expires_at is null or grant_access.expires_at > now())
-    )
-  );
+-- Delegated audit trails must originate in authorized server-side code.
+-- Never allow arbitrary authenticated clients to fabricate successful actions
+-- by submitting a grant ID and self-declared event payload over the Data API.
+-- No INSERT policy: privileged server writes are audited out of band.

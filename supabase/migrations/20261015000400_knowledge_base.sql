@@ -263,7 +263,9 @@ declare
   article_tenant_id uuid;
 begin
   select tenant_id into article_tenant_id from public.knowledge_articles where id = new.article_id;
-  if article_tenant_id is distinct from new.tenant_id then
+  if article_tenant_id is distinct from new.tenant_id
+     or not exists (select 1 from public.tickets ticket
+                    where ticket.id = new.ticket_id and ticket.tenant_id = new.tenant_id) then
     raise exception 'Knowledge article and ticket association must have the same tenant';
   end if;
   return new;
