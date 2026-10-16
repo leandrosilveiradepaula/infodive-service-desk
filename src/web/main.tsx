@@ -123,7 +123,19 @@ function Application() {
   if (profile === null) return <main className="loginPage">
     <LoginForm onAuthenticated={() => { setLoading(true); setRevision(value => value + 1); }} />
   </main>;
-  return <AuthenticationProvider profile={profile}>
+  const signOut = async () => {
+    const csrf = await fetch("/api/auth/csrf", { credentials: "same-origin", cache: "no-store" });
+    const payload = await csrf.json() as { csrfToken?: string };
+    if (!csrf.ok || !payload.csrfToken) throw Error("Falha ao sair.");
+    const response = await fetch("/api/auth/logout", {
+      method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: { "x-csrf-token": payload.csrfToken }
+    });
+    if (!response.ok && response.status !== 503) throw Error("Falha ao sair.");
+    setProfile(null);
+    setRevision(value => value + 1);
+  };
+  return <AuthenticationProvider profile={profile} onSignOut={signOut}>
     <AppShell pageTitle="Central de atendimento" currentPath="/">
       <section><h2>Bem-vindo ao Service Desk</h2>
         <p>Olá, {profile.displayName}. Sua identidade foi verificada para {profile.tenantName}.</p>
