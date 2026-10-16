@@ -7,6 +7,8 @@ import { handleSessionHttpRequest } from "./session-http";
 import { issueCsrf, clearAuthCookies } from "./csrf-cookie";
 import { selectTenant } from "./select-tenant";
 import { validLogoutRequest } from "./logout-policy";
+import { exchangeCredentials } from "./credential-exchange";
+import { signTenantSelection } from "./session-cookies";
 
 export interface AuthApiConfig {
   readonly supabaseUrl: string;
@@ -40,6 +42,40 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
       if (path === "/api/auth/csrf") {
         const result = issueCsrf(incoming.method ?? "");
         send(result.status, result.body, result.headers);
+        return;
+      }
+      if (path === "/api/auth/login") {
+        if (incoming.method !== "POST") { send(405, { ok: false }, { Allow: "POST" }); return; }
+        if (!validLogoutRequest(headers, config.publicOrigin)) { send(403, { ok: false }); return; }
+        let raw = "";
+        for await (const chunk of incoming) {
+          raw += String(chunk);
+          if (raw.length > 4096) { send(413, { ok: false }); return; }
+        }
+        let payload: Record<string, unknown>;
+        try {
+          const value: unknown = JSON.parse(raw);
+          if (!value || typeof value !== "object" || Array.isArray(value)) throw Error("invalid");
+          payload = value as Record<string, unknown>;
+        } catch { send(400, { ok: false }); return; }
+        const result = await exchangeCredentials({
+          supabaseUrl: config.supabaseUrl, anonKey: config.anonKey, memberships
+        }, {
+          email: typeof payload.email === "string" ? payload.email : "",
+          password: typeof payload.password === "string" ? payload.password : "",
+          tenantId: typeof payload.tenantId === "string" ? payload.tenantId : ""
+        }, request);
+        if (result.status !== 200 || !result.token || !result.userId || !result.expiresIn) {
+          send(result.status, { ok: false }); return;
+        }
+        const selection = signTenantSelection(result.userId, payload.tenantId as string,
+          Date.now() + result.expiresIn * 1000, config.tenantSigningKey);
+        send(200, { ok: true }, { "Set-Cookie": [
+          "sd-access-token=" + encodeURIComponent(result.token) +
+            "; Path=/; Max-Age=" + result.expiresIn + "; HttpOnly; Secure; SameSite=Lax",
+          "sd-tenant-selection=" + selection +
+            "; Path=/; Max-Age=" + result.expiresIn + "; HttpOnly; Secure; SameSite=Lax"
+        ] });
         return;
       }
       if (path === "/api/auth/select-tenant") {
