@@ -25,7 +25,7 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
       origin: incoming.headers.origin,
       "x-csrf-token": incoming.headers["x-csrf-token"] as string | undefined
     };
-    const send = (status: number, body: unknown, extra: Record<string, string | readonly string[]> = {}) => {
+    const send = (status: number, body: unknown, extra: Record<string, string | string[]> = {}) => {
       response.writeHead(status, {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store, private",
