@@ -12,6 +12,7 @@ import { exchangeCredentials } from "./credential-exchange";
 import { signTenantSelection, issueAuthCookies, readSignedTenantSelection, extractRefreshToken } from "./session-cookies";
 import { rotateSession } from "./refresh-session";
 import { revokeCurrentSession } from "./revoke-session";
+import { executeTicketRequest } from "../tickets/ticket-endpoints";
 
 export interface AuthApiConfig {
   readonly supabaseUrl: string;
@@ -136,6 +137,45 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
         const revoke = await revokeCurrentSession(config.supabaseUrl, config.anonKey, headers.cookie, request);
         send(revoke === "unavailable" ? 503 : 200, { ok: revoke !== "unavailable" },
           { "Set-Cookie": [...clearAuthCookies()] });
+        return;
+      }
+      if (path === "/api/tickets" || path.startsWith("/api/tickets/")) {
+        const method = incoming.method ?? "";
+        if (!["GET", "POST"].includes(method) || (method === "POST" && path !== "/api/tickets")) {
+          send(405, { error: "method_not_allowed" }, { Allow: "GET, POST" }); return;
+        }
+        if (method === "POST" && !validLogoutRequest(headers, config.publicOrigin)) {
+          send(403, { error: "csrf_rejected" }); return;
+        }
+        const token = extractAccessToken(headers);
+        if (!token) { send(401, { error: "authentication_required" }); return; }
+        const verified = await identity.verifySession(headers);
+        if (!verified) { send(401, { error: "authentication_required" }); return; }
+        const tenantId = verifyTenantSelection(headers.cookie, verified.userId, config.tenantSigningKey);
+        if (!tenantId) { send(403, { error: "tenant_selection_invalid" }); return; }
+        const allowedRoles = new Set(["tenant_administrator", "service_manager", "service_agent",
+          "requester", "customer_administrator", "customer_user"]);
+        const active = (await memberships.findByUserId(verified.userId)).filter(m =>
+          m.userId === verified.userId && m.tenantId === tenantId && m.membershipStatus === "active");
+        if (!active.length || !active.every(m => allowedRoles.has(m.roleCode) &&
+            m.tenantName.trim() && m.displayName.trim())) {
+          send(403, { error: "tenant_access_denied" }); return;
+        }
+        let body = "";
+        if (method === "POST") {
+          for await (const chunk of incoming) {
+            body += String(chunk);
+            if (Buffer.byteLength(body, "utf8") > 12288) {
+              send(413, { error: "request_too_large" }); return;
+            }
+          }
+        }
+        const result = await executeTicketRequest({
+          supabaseUrl: config.supabaseUrl, publishableKey: config.anonKey,
+          accessToken: token, tenantId, userId: verified.userId,
+          method, pathname: path, body, request
+        });
+        send(result.status, result.body);
         return;
       }
       if (await serveStaticWeb(incoming.method ?? "", path, config.webRoot, response)) return;
