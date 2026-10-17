@@ -32,10 +32,10 @@ psql -X -w -v ON_ERROR_STOP=1 -c \
 # Disposable-only diagnostic surface for JWT claim/role correspondence.
 psql -X -w -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
 create function public.qa_claim_probe()
-returns jsonb language sql stable security invoker as $
-  select jsonb_build_object('uid', auth.uid(), 'role', current_user,
-    'member', public.is_active_tenant_member('10000000-0000-4000-8000-000000000002'))
-$;
+returns jsonb language sql stable security invoker as '
+  select jsonb_build_object(''uid'', auth.uid(), ''role'', current_user,
+    ''member'', public.is_active_tenant_member(''10000000-0000-4000-8000-000000000002''))
+';
 grant execute on function public.qa_claim_probe() to authenticated;
 SQL
 bash tests/security/run_postgrest_contract.sh
