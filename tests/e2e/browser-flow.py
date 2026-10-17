@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from playwright.sync_api import sync_playwright
 folder=Path(".qa-evidence")
 folder.mkdir(exist_ok=True)
@@ -27,12 +28,12 @@ with sync_playwright() as p:
     assert response.status==201, (response.status,response.text())
     ticket=response.json()["ticket"]
     assert ticket["subject"]==subject and ticket["protocol"]
-    button=page.get_by_role("button",name=lambda x:subject in x)
+    button=page.get_by_role("button",name=re.compile(re.escape(subject)))
     button.wait_for()
     page.screenshot(path=str(folder/"02-created.png"))
     page.reload()
-    page.get_by_role("button",name=lambda x:subject in x).click()
-    page.get_by_role("heading",name=lambda x:ticket["protocol"] in x).wait_for()
+    page.get_by_role("button",name=re.compile(re.escape(subject))).click()
+    page.get_by_role("heading",name=re.compile(re.escape(ticket["protocol"]))).wait_for()
     page.screenshot(path=str(folder/"03-persisted.png"))
     page.get_by_label("Abrir menu da conta").click()
     page.get_by_role("button",name="Sair").click()
