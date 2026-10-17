@@ -72,4 +72,5 @@ if [[ "$rls_ready" != "1" ]]; then
   exit 1
 fi
 SERVICE_DESK_QA_JWT_SECRET="$qa_jwt_secret" python3 tests/security/postgrest_ticket_rls_contract.py
+bash tests/e2e/run_browser_qa.sh
 
