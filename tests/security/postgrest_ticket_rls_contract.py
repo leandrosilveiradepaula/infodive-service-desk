@@ -57,6 +57,12 @@ def execute(token, method="GET", fields=None, payload=None):
 
 def main():
     user_b = sign(USER_B)
+    probe_url = "http://127.0.0.1:3319/rpc/qa_claim_probe"
+    request = urllib.request.Request(probe_url, headers={"Authorization": "Bearer " + user_b})
+    with urllib.request.urlopen(request, timeout=8) as response:
+        probe = json.loads(response.read())
+    assert probe["uid"] == USER_B and probe["role"] == "authenticated" and probe["member"] is True, probe
+    print("POSTGREST_JWT_IDENTITY_PROBE_PASS=1")
     where_b = {"select": SELECT, "tenant_id": "eq." + TENANT_B,
                "order": "created_at.desc", "limit": "50"}
     subject = "QA real PostgREST ticket persistence"
