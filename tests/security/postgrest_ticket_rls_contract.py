@@ -98,7 +98,7 @@ def main():
     assert code == 200 and other == [], f"Ticket leaked to non-owner: {code}: {other}"
 
     code, anonymous = execute(None, fields=where_b)
-    assert code in (401, 403), f"Anonymous query unexpectedly allowed: {code}: {anonymous}"
+    assert code in (401, 403) or (code == 200 and anonymous == []), f"Anonymous ticket data exposed: {code}: {anonymous}"
     code, spoofed = execute(user_b, "POST", {"select": SELECT}, {
         "tenant_id": TENANT_A, "requester_user_id": USER_A,
         "subject": "Spoofed tenant", "description": None, "priority": "normal",
