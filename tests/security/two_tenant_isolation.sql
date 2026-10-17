@@ -124,8 +124,9 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000011',false);
 do $$
 begin
- if (select count(*) from public.tickets) <> 0 then
-   raise exception 'Tenant A cannot see a ticket without explicit ticket permission';
+ if (select count(*) from public.tickets where requester_user_id = auth.uid()) <> 1
+    or (select count(*) from public.tickets where tenant_id = '10000000-0000-4000-8000-000000000002') <> 0 then
+   raise exception 'Requester must see own ticket without cross-tenant data';
  end if;
 end $$;
 reset role;
