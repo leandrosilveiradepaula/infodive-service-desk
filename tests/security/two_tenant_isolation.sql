@@ -297,3 +297,29 @@ begin
 end $$;
 
 select 'TWO_TENANT_RLS_FK_PASS' as result;
+
+
+-- Operational ticket contract: requester creates and reads their own B ticket
+-- with a user JWT; an unrelated B member and tenant A must not see it.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000022', false);
+insert into public.tickets(id,tenant_id,requester_user_id,subject,description,priority)
+values ('60000000-0000-4000-8000-000000000099',
+        '10000000-0000-4000-8000-000000000002',
+        '10000000-0000-4000-8000-000000000022',
+        'REST operational create test', 'Ticket from requester', 'normal');
+do $$
+begin
+  if (select count(*) from public.tickets where id = '60000000-0000-4000-8000-000000000099') <> 1 then
+    raise exception 'Requester cannot read own ticket';
+  end if;
+end $$;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000011', false);
+do $$
+begin
+  if (select count(*) from public.tickets where id = '60000000-0000-4000-8000-000000000099') <> 0 then
+    raise exception 'Unrelated B membership can read another requester ticket without ticket read permission';
+  end if;
+end $$;
+reset role;
+select 'REQUESTER_TICKET_CREATE_READ_ISOLATION_PASS' as result;
