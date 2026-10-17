@@ -83,6 +83,88 @@ function LogoutButton({ onLogout }: { onLogout: () => void }) {
   }
   return <button type="button" disabled={busy} onClick={() => { void logout(); }}>Sair</button>;
 }
+
+interface TicketItem {
+  id: string; tenantId: string; protocol: string; subject: string;
+  description: string | null; priority: string; status: string;
+  createdAt: string; updatedAt: string;
+}
+function TicketsPanel() {
+  const [items, setItems] = useState<TicketItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("normal");
+  const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<TicketItem | null>(null);
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/tickets", { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) throw Error("Não foi possível consultar os chamados. Verifique suas permissões.");
+      const data = await response.json() as { items?: TicketItem[] };
+      if (!Array.isArray(data.items)) throw Error("A lista de chamados é inválida.");
+      setItems(data.items);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Falha ao consultar chamados."); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void load(); }, []);
+  async function createTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true); setError("");
+    try {
+      const csrf = await fetch("/api/auth/csrf", { credentials: "same-origin", cache: "no-store" });
+      const data = await csrf.json() as { csrfToken?: string };
+      if (!csrf.ok || !data.csrfToken) throw Error("Não foi possível iniciar a operação.");
+      const response = await fetch("/api/tickets", {
+        method: "POST", credentials: "same-origin", cache: "no-store",
+        headers: { "Content-Type": "application/json", "x-csrf-token": data.csrfToken },
+        body: JSON.stringify({ subject, description, priority })
+      });
+      if (!response.ok) throw Error(response.status === 403 ?
+        "Você não tem permissão para abrir chamados nesta empresa." : "Não foi possível salvar o chamado.");
+      const payload = await response.json() as { ticket?: TicketItem };
+      if (!payload.ticket) throw Error("Resposta inválida ao salvar chamado.");
+      setSubject(""); setDescription(""); setPriority("normal");
+      setSelected(payload.ticket);
+      await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Erro ao salvar."); }
+    finally { setSaving(false); }
+  }
+  return <section>
+    <h2>Chamados da sua empresa</h2>
+    <p>Abra uma solicitação ou acompanhe os chamados registrados no sistema.</p>
+    <form onSubmit={event => { void createTicket(event); }}>
+      <h3>Novo chamado</h3>
+      <label>Assunto <input required minLength={3} maxLength={240} value={subject}
+        onChange={event => setSubject(event.target.value)} /></label>
+      <label>Descrição <textarea maxLength={5000} value={description}
+        onChange={event => setDescription(event.target.value)} /></label>
+      <label>Prioridade <select value={priority} onChange={event => setPriority(event.target.value)}>
+        <option value="low">Baixa</option><option value="normal">Normal</option>
+        <option value="high">Alta</option><option value="urgent">Urgente</option>
+      </select></label>
+      <button type="submit" disabled={saving}>{saving ? "Salvando..." : "Abrir chamado"}</button>
+    </form>
+    {error && <p role="alert">{error}</p>}
+    <h3>Chamados recentes</h3>
+    <button type="button" onClick={() => { void load(); }} disabled={loading}>Atualizar</button>
+    {loading ? <p>Carregando chamados...</p> : items.length === 0 ?
+      <p>Nenhum chamado encontrado.</p> :
+      <ul>{items.map(item => <li key={item.id}>
+        <button type="button" onClick={() => setSelected(item)}>
+          {item.protocol} — {item.subject} ({item.status})
+        </button>
+      </li>)}</ul>}
+    {selected && <article><h3>{selected.protocol} — {selected.subject}</h3>
+      <p>Status: {selected.status} · Prioridade: {selected.priority}</p>
+      <p>{selected.description || "Sem descrição adicional."}</p>
+      <button type="button" onClick={() => setSelected(null)}>Fechar detalhes</button>
+    </article>}
+  </section>;
+}
 function Application() {
   const [profile, setProfile] = useState<AuthenticatedProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,7 +221,7 @@ function Application() {
     <AppShell pageTitle="Central de atendimento" currentPath="/">
       <section><h2>Bem-vindo ao Service Desk</h2>
         <p>Olá, {profile.displayName}. Sua identidade foi verificada para {profile.tenantName}.</p>
-        <p>Os módulos operacionais dependem da conexão segura ao banco de chamados.</p>
+        <TicketsPanel />
         <LogoutButton onLogout={() => { setProfile(null); setRevision(value => value + 1); }} />
       </section>
     </AppShell>
