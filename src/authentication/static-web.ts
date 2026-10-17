@@ -6,9 +6,9 @@ const mime: Record<string, string> = { js:"text/javascript", css:"text/css", svg
 const security = { "X-Content-Type-Options":"nosniff", "X-Frame-Options":"DENY", "Referrer-Policy":"no-referrer",
   "Content-Security-Policy":"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" };
 export async function serveStaticWeb(method: string, pathname: string, root: string | undefined, response: ServerResponse): Promise<boolean> {
-  if (!root || !(pathname === "/" || pathname === "/index.html" || asset.test(pathname))) return false;
+  if (!root || !(pathname === "/" || pathname === "/index.html" || pathname === "/chamados" || asset.test(pathname))) return false;
   if (method !== "GET" && method !== "HEAD") { response.writeHead(405, {...security, Allow:"GET, HEAD"}); response.end(); return true; }
-  const name = pathname === "/" || pathname === "/index.html" ? "index.html" : pathname.slice(1);
+  const name = pathname === "/" || pathname === "/index.html" || pathname === "/chamados" ? "index.html" : pathname.slice(1);
   try {
     const [base, target] = await Promise.all([realpath(resolve(root)), realpath(resolve(root, name))]);
     const allowed = name === "index.html" ? base : await realpath(resolve(base, "assets"));

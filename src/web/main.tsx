@@ -166,6 +166,17 @@ function TicketsPanel() {
   </section>;
 }
 function Application() {
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const handlePop = () => setCurrentPath(window.location.pathname);
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+  const navigate = (pathname: string) => {
+    if (!["/", "/chamados"].includes(pathname)) return;
+    window.history.pushState(null, "", pathname);
+    setCurrentPath(pathname);
+  };
   const [profile, setProfile] = useState<AuthenticatedProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -218,11 +229,20 @@ function Application() {
     setRevision(value => value + 1);
   };
   return <AuthenticationProvider profile={profile} onSignOut={signOut}>
-    <AppShell pageTitle="Central de atendimento" currentPath="/">
-      <section><h2>Bem-vindo ao Service Desk</h2>
-        <p>Olá, {profile.displayName}. Sua identidade foi verificada para {profile.tenantName}.</p>
-        <TicketsPanel />
-        <LogoutButton onLogout={() => { setProfile(null); setRevision(value => value + 1); }} />
+    <AppShell pageTitle={currentPath === "/chamados" ? "Chamados" : "Central de atendimento"}
+      currentPath={currentPath} onNavigate={navigate}
+      navigation={[{label: "Início", href: "/"},
+        {label: "Chamados", href: "/chamados", roles: [
+          "requester", "customer_user", "customer_administrator", "service_agent",
+          "service_manager", "tenant_administrator"
+        ]}]}>
+      <section>
+        {currentPath === "/" && <>
+          <h2>Bem-vindo ao Service Desk</h2>
+          <p>Olá, {profile.displayName}. Sua empresa é {profile.tenantName}.</p>
+          <button type="button" onClick={() => navigate("/chamados")}>Consultar chamados</button>
+        </>}
+        {currentPath === "/chamados" && <TicketsPanel />}
       </section>
     </AppShell>
   </AuthenticationProvider>;
