@@ -460,7 +460,9 @@ create policy ticket_statuses_manage on public.ticket_status_definitions for all
 create policy ticket_transitions_read on public.ticket_transition_rules for select using (public.is_active_tenant_member(tenant_id));
 create policy ticket_transitions_manage on public.ticket_transition_rules for all using (public.has_tenant_permission(tenant_id, 'ticket', 'manage')) with check (public.has_tenant_permission(tenant_id, 'ticket', 'manage'));
 
-create policy tickets_read on public.tickets for select using (public.can_read_ticket(id));
+create policy tickets_read on public.tickets for select to authenticated
+  using ((requester_user_id = (select auth.uid()) and public.is_active_tenant_member(tenant_id))
+         or public.can_read_ticket(id));
 create policy tickets_insert on public.tickets for insert to authenticated
   with check (requester_user_id = (select auth.uid()) and public.is_active_tenant_member(tenant_id));
 create policy tickets_update on public.tickets for update using (public.can_manage_ticket(id)) with check (public.has_tenant_permission(tenant_id, 'ticket', 'manage'));
