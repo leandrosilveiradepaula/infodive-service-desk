@@ -42,3 +42,34 @@ if [[ "$ready" != "1" ]]; then
   exit 1
 fi
 python3 tests/security/postgrest_membership_contract.py
+# Unlike the privileged embed contract above, this second PostgREST process
+# impersonates authenticated/anon roles with signed test JWTs. It uses only the
+# disposable PostgreSQL service on 127.0.0.1.
+rls_container=""
+cleanup_rls() {
+  if [[ -n "$rls_container" ]]; then docker rm -f "$rls_container" >/dev/null 2>&1 || true; fi
+}
+trap 'cleanup_rls; cleanup' EXIT
+qa_jwt_secret="disposable-service-desk-postgrest-jwt-key-qa-only-64-characters-minimum"
+rls_container="$(docker run --detach --rm --network host \
+  -e PGRST_DB_URI="postgres://postgres:disposable-qa-only-password@127.0.0.1:5432/service_desk_security_test" \
+  -e PGRST_DB_ANON_ROLE=anon \
+  -e PGRST_DB_SCHEMAS=public \
+  -e PGRST_JWT_SECRET="$qa_jwt_secret" \
+  -e PGRST_SERVER_HOST=127.0.0.1 \
+  -e PGRST_SERVER_PORT=3319 \
+  "$image")"
+rls_ready=0
+for attempt in $(seq 1 45); do
+  if curl --silent --fail --max-time 2 "http://127.0.0.1:3319/" >/dev/null; then
+    rls_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$rls_ready" != "1" ]]; then
+  echo "Disposable JWT-scoped PostgREST did not become ready" >&2
+  exit 1
+fi
+SERVICE_DESK_QA_JWT_SECRET="$qa_jwt_secret" python3 tests/security/postgrest_ticket_rls_contract.py
+
