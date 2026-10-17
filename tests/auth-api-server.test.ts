@@ -222,3 +222,73 @@ test("multi-company discovery revokes provisional session before returning autho
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });
+
+
+test("ticket HTTP workflow creates and lists real-shaped tickets with verified user JWT and tenant", async () => {
+  const { signTenantSelection } = await import("../src/authentication/session-cookies");
+  const selected = signTenantSelection(userId, tenantId, Date.now() + 300000, "k".repeat(48));
+  const ticketId = "33333333-3333-4333-8333-333333333333";
+  const record = { id: ticketId, tenant_id: tenantId, protocol: "T-000007",
+    subject: "Servidor indisponível", description: "Erro ao conectar", priority: "high",
+    status: "new", created_at: "2026-10-16T00:00:00Z", updated_at: "2026-10-16T00:00:00Z" };
+  let inserts = 0;
+  const server = createAuthApiServer({
+    supabaseUrl: "https://example.supabase.co", anonKey: "publishable-test",
+    secretKey: "sb_secret_test", tenantSigningKey: "k".repeat(48),
+    publicOrigin: "https://desk.example.test"
+  }, async (url, init) => {
+    const target = String(url);
+    if (target.includes("/auth/v1/user")) {
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer access-for-qa");
+      return new Response(JSON.stringify({ id: userId, email: "agent@example.test" }), { status: 200 });
+    }
+    if (target.includes("/rest/v1/users"))
+      return new Response(JSON.stringify([{ id: userId, tenant_id: tenantId, display_name: "Agent" }]), { status: 200 });
+    if (target.includes("/rest/v1/memberships")) return new Response(JSON.stringify([{
+      user_id: userId, tenant_id: tenantId, status: "active",
+      roles: { code: "requester", tenant_id: tenantId }, tenants: { name: "Company" }
+    }]), { status: 200 });
+    if (target.includes("/rest/v1/tickets")) {
+      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer access-for-qa");
+      assert.equal(new Headers(init?.headers).get("apikey"), "publishable-test");
+      assert.equal(new URL(target).searchParams.get("tenant_id"), "eq." + tenantId);
+      if (init?.method === "POST") {
+        inserts++;
+        const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
+        assert.deepEqual(Object.keys(payload).sort(), ["tenant_id", "requester_user_id", "subject", "description", "priority"].sort());
+        assert.equal(payload.requester_user_id, userId);
+        return new Response(JSON.stringify([record]), { status: 201 });
+      }
+      return new Response(JSON.stringify([record]), { status: 200 });
+    }
+    throw Error("Unexpected provider request: " + target);
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const addr = server.address(); assert.ok(addr && typeof addr !== "string");
+    const base = "http://127.0.0.1:" + addr.port;
+    const csrf = await fetch(base + "/api/auth/csrf");
+    const { csrfToken } = await csrf.json() as {csrfToken: string};
+    const cookie = "sd-csrf=" + csrfToken + "; sd-access-token=access-for-qa; sd-tenant-selection=" + selected;
+    const headers = { Origin: "https://desk.example.test", Cookie: cookie, "x-csrf-token": csrfToken };
+    const create = await fetch(base + "/api/tickets", { method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: "Servidor indisponível", description: "Erro ao conectar", priority: "high" }) });
+    assert.equal(create.status, 201);
+    assert.equal((await create.json() as {ticket: {protocol: string}}).ticket.protocol, "T-000007");
+    assert.equal(inserts, 1);
+    const list = await fetch(base + "/api/tickets", { headers: { Cookie: cookie } });
+    assert.equal(list.status, 200);
+    assert.equal((await list.json() as {items: unknown[]}).items.length, 1);
+    const detail = await fetch(base + "/api/tickets/" + ticketId, { headers: { Cookie: cookie } });
+    assert.equal(detail.status, 200);
+    assert.equal((await detail.json() as {ticket: {id: string}}).ticket.id, ticketId);
+    const rejected = await fetch(base + "/api/tickets", {
+      method: "POST", headers: { Cookie: cookie, Origin: "https://malicious.test" },
+      body: JSON.stringify({subject:"Ataque"}) });
+    assert.equal(rejected.status, 403);
+    assert.equal(inserts, 1);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
