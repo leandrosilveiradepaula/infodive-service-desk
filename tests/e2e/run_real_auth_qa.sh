@@ -37,6 +37,12 @@ trap cleanup EXIT
 # already used by the isolated Service Desk RLS migration matrix.
 createdb -h 127.0.0.1 -p 5432 -U postgres service_desk_auth_test
 
+# Supabase's Docker Postgres image creates the auth namespace during its
+# bootstrap. A plain postgres:16 Actions service does not: establish only
+# that isolated schema before allowing GoTrue to run its own migrations.
+PGDATABASE=service_desk_auth_test psql -X -w -v ON_ERROR_STOP=1 \
+  -c 'create schema if not exists auth; create extension if not exists pgcrypto;' >/dev/null
+
 # Official GoTrue image pinned by immutable multi-platform manifest digest.
 # v2.183.0; only a disposable loopback listener is created.
 image="supabase/gotrue@sha256:9e067aef92d24f02ccd4415293cf6cbba23fb1172fc3c2209249ebbbcf3250d0"
@@ -75,6 +81,18 @@ if [[ "$auth_ready" != "1" ]]; then
       echo "GOTRUE_STARTUP_HINT=$category" >&2
     fi
   done
+  # Extract only bounded, redacted startup diagnostics. The database URL
+  # and all key/token-like strings are scrubbed before printing CI evidence.
+  docker logs "$auth_container" 2>&1 | python3 -c '
+import re,sys
+lines=sys.stdin.read(25000).splitlines()
+for line in lines[-8:]:
+ if not re.search(r"error|fatal|migration|database|panic",line,re.I): continue
+ line=re.sub(r"postgres(?:ql)?://[^\\\" ]+","[database-url-redacted]",line,flags=re.I)
+ line=re.sub(r"[A-Za-z0-9_+\\/=.-]{32,}","[long-value-redacted]",line)
+ line=re.sub(r"(?i)(password|secret|token|apikey|authorization)\\s*[:=]\\s*[^,} ]+",r"\\1=[redacted]",line)
+ print("SANITIZED_GOTRUE_STARTUP_LOG="+line[:400])
+' || true
   exit_code="$(docker inspect "$auth_container" --format '{{.State.ExitCode}}' 2>/dev/null || true)"
   if [[ "$exit_code" =~ ^[0-9]+$ ]]; then echo "GOTRUE_EXIT_CODE=$exit_code" >&2; fi
   echo "Disposable pinned GoTrue did not become healthy; no auth assertions made" >&2
