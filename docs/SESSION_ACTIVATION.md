@@ -1,5 +1,19 @@
 # Service Desk — autenticação e publicação
 
+## Supabase Auth REAL em teste descartavel (21/10/2026)
+
+A suite antiga usa `tests/e2e/qa-https-server.ts` com autenticação simulada, embora PostgREST e RLS sejam reais. Agora o mesmo workflow isolado invoca uma segunda suite, sem trocar a autenticação do produto:
+
+- `tests/e2e/run_real_auth_qa.sh` exige que o destino seja o PostgreSQL temporário conhecido e a execução seja opt-in através de `SERVICE_DESK_QA_REAL_AUTH=1`.
+- Cria o banco `service_desk_auth_test` dentro do contêiner efêmero do GitHub Actions e inicia a imagem oficial GoTrue `v2.183.0` por digest imutável, vinculada exclusivamente a `127.0.0.1:3321`. O banco oficial usa migrations do próprio contêiner, separadas das migrations do Service Desk em teste.
+- Cadastra dois usuários **descartáveis** no GoTrue real, um em cada tenant. Vincula o UUID autenticado a memberships e roles na base temporária. A chave JWT do GoTrue é a mesma usada pelo PostgREST de RLS no runner.
+- Um gateway HTTPS na mesma origem da interface encaminha apenas três endpoints de Auth (`/token`, `/user`, `/logout`) ao GoTrue local; memberships são lidas por PostgREST server-side e tickets são submetidos a PostgREST com RLS. A conexão a origens externas é proibida no gateway.
+- Playwright autentica com senha verdadeira, rejeita senha inválida e usuário do tenant estrangeiro, faz refresh real, cria/lista/recarrega ticket e faz logout. Checa que a sessão e os tickets estão inacessíveis depois do logout.
+- Os marcadores `GOTRUE_REAL_PASSWORD_REFRESH_LOGOUT_PASS=1` e `BROWSER_QA_REAL_GOTRUE_RLS_TICKET_PASS=1` **só** são publicados após todos esses passos. O resultado antigo `QA_AUTH_MOCKED_POSTGREST_REAL=1` continua separado.
+
+Essas verificações são E2E real de Auth em contêiner local, **não** acesso autenticado ao Supabase de homologação/produção nem Preview do produto. CI nativa do repositório privado e Preview SHA exato continuam gates independentes. Não aplicar migrations no Supabase hospedado, não criar serviços pagos, não expor JWTs nem credenciais em artifacts.
+
+
 **Estado: candidato em branch Draft; não publicado em produção.**
 
 ## Integração HTTP + interface

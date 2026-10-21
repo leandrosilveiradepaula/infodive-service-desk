@@ -25,3 +25,14 @@ python3 -m venv "$temp/venv"
 "$temp/venv/bin/python" -m playwright install chromium >/dev/null
 "$temp/venv/bin/python" tests/e2e/browser-flow.py 2>&1 | tee .qa-evidence/browser-flow.log
 grep -Fx 'BROWSER_QA_HTTPS_TICKET_CREATE_RELOAD_LOGOUT_PASS=1' .qa-evidence/browser-flow.log
+# Keep the original mock-auth browser suite as independent evidence. Only
+# after its success, stop the first HTTPS fixture and use the SAME disposable
+# PostgreSQL/PostgREST services with official local GoTrue and real passwords.
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+pid=""
+SERVICE_DESK_QA_REAL_AUTH=1 \
+  SERVICE_DESK_QA_PYTHON="$temp/venv/bin/python" \
+  QA_TLS_KEY="$temp/key.pem" QA_TLS_CERT="$temp/cert.pem" \
+  bash tests/e2e/run_real_auth_qa.sh
+
