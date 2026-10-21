@@ -14,7 +14,7 @@ const bootstrap = file("tests/e2e/bootstrap_real_auth_qa.py");
 const browser = file("tests/e2e/browser-live-auth-flow.py");
 
 test("real GoTrue QA is separate from the existing mocked Auth flow", () => {
-  assert.match(real, /Real local Supabase Auth/);
+  assert.match(real, /REAL local Supabase Auth/);
   assert.match(real, /"\/auth\/v1\/token"|"\u002ftoken"/);
   assert.match(real, /http:\/\/127\.0\.0\.1:3321/);
   assert.match(real, /http:\/\/127\.0\.0\.1:3319\/tickets/);

@@ -40,7 +40,7 @@ createdb -h 127.0.0.1 -p 5432 -U postgres service_desk_auth_test
 # Official GoTrue image pinned by immutable multi-platform manifest digest.
 # v2.183.0; only a disposable loopback listener is created.
 image="supabase/gotrue@sha256:9e067aef92d24f02ccd4415293cf6cbba23fb1172fc3c2209249ebbbcf3250d0"
-auth_container="$(docker run --detach --rm --network host \
+auth_container="$(docker run --detach --network host \
   -e GOTRUE_API_HOST=127.0.0.1 \
   -e GOTRUE_API_PORT=3321 \
   -e GOTRUE_DB_DRIVER=postgres \
@@ -67,6 +67,16 @@ for i in $(seq 1 50); do
   sleep 1
 done
 if [[ "$auth_ready" != "1" ]]; then
+  # Never dump raw container logs: GoTrue may echo sensitive configuration.
+  # Only publish bounded categories and process status for troubleshooting.
+  startup_logs="$(docker logs "$auth_container" 2>&1 || true)"
+  for category in "migration" "database" "connection" "configuration" "missing" "required" "JWT" "permission" "invalid" "fatal" "error"; do
+    if grep -qi "$category" <<< "$startup_logs"; then
+      echo "GOTRUE_STARTUP_HINT=$category" >&2
+    fi
+  done
+  exit_code="$(docker inspect "$auth_container" --format '{{.State.ExitCode}}' 2>/dev/null || true)"
+  if [[ "$exit_code" =~ ^[0-9]+$ ]]; then echo "GOTRUE_EXIT_CODE=$exit_code" >&2; fi
   echo "Disposable pinned GoTrue did not become healthy; no auth assertions made" >&2
   exit 1
 fi
