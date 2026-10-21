@@ -35,6 +35,7 @@ test("all GoTrue credentials and DB endpoints are disposable and local", () => {
   assert.match(startup, /GOTRUE_API_HOST=127\.0\.0\.1/);
   assert.match(startup, /GOTRUE_DB_DATABASE_URL="postgres:\/\/postgres:disposable-qa-only-password@127\.0\.0\.1:5432\/service_desk_auth_test/);
   assert.match(startup, /supabase\/gotrue@sha256:[0-9a-f]{64}/);
+  assert.ok(startup.includes("options=-csearch_path%3Dauth%2Cpublic"));
   assert.match(startup, /dropdb -h 127\.0\.0\.1/);
   assert.match(real, /source\.origin !== "https:\/\/qa-only\.invalid"/);
   assert.doesNotMatch(startup, /VERCEL_TOKEN|OPENAI_API_KEY|SERVICE_ROLE_KEY|SUPABASE_URL=/);

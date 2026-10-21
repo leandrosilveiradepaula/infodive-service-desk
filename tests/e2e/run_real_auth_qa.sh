@@ -33,6 +33,9 @@ cleanup(){
 }
 trap cleanup EXIT
 
+# Explicit search_path is essential for GoTrue v2.183 migrations: otherwise
+# enum types can land in public but later migrations require auth.factor_type.
+# This is a known upstream standalone/Postgres initialization incompatibility.
 # Separate DB avoids colliding with the minimal auth.users placeholder
 # already used by the isolated Service Desk RLS migration matrix.
 createdb -h 127.0.0.1 -p 5432 -U postgres service_desk_auth_test
@@ -50,7 +53,7 @@ auth_container="$(docker run --detach --network host \
   -e GOTRUE_API_HOST=127.0.0.1 \
   -e GOTRUE_API_PORT=3321 \
   -e GOTRUE_DB_DRIVER=postgres \
-  -e GOTRUE_DB_DATABASE_URL="postgres://postgres:disposable-qa-only-password@127.0.0.1:5432/service_desk_auth_test?sslmode=disable" \
+  -e GOTRUE_DB_DATABASE_URL="postgres://postgres:disposable-qa-only-password@127.0.0.1:5432/service_desk_auth_test?sslmode=disable&options=-csearch_path%3Dauth%2Cpublic" \
   -e GOTRUE_DB_NAMESPACE=auth \
   -e GOTRUE_SITE_URL="https://localhost:3320" \
   -e API_EXTERNAL_URL="http://127.0.0.1:3321" \
