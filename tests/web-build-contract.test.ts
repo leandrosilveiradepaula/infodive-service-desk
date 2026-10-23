@@ -29,3 +29,20 @@ test("dependencies are pinned without ranges and client does not depend on serve
   }
   assert.equal("SUPABASE_SERVICE_ROLE_KEY" in packageInfo, false);
 });
+
+test("unauthenticated entrypoint uses a dedicated responsive branded login and accessible labels", () => {
+  const css = readFileSync("../src/styles/login.module.css", "utf8");
+  assert.match(entry, /import loginStyles from "\.\.\/styles\/login\.module\.css"/);
+  assert.match(entry, /data-testid="login-layout"/);
+  assert.match(entry, /data-testid="login-card"/);
+  assert.match(entry, /htmlFor="service-desk-email"/);
+  assert.match(entry, /htmlFor="service-desk-password"/);
+  assert.match(entry, /aria-labelledby="login-title"/);
+  assert.match(css, /\.layout\s*\{/);
+  assert.match(css, /\.brandPanel\s*\{/);
+  assert.match(css, /\.formPanel\s*\{/);
+  assert.match(css, /@media\s*\(max-width:\s*760px\)/);
+  assert.match(css, /:focus-visible/);
+  assert.doesNotMatch(entry, /<main className="loginPage">/);
+  assert.doesNotMatch(css, /@import\s|url\(https?:/);
+});

@@ -11,7 +11,17 @@ with sync_playwright() as p:
     page.on("pageerror",lambda e:errors.append(str(e)))
     page.goto("https://localhost:3320/")
     page.get_by_role("heading",name="Acessar Service Desk").wait_for()
+    layout=page.get_by_test_id("login-layout")
+    card=page.get_by_test_id("login-card")
+    assert layout.evaluate("element => getComputedStyle(element).display")=="grid"
+    assert card.evaluate("element => getComputedStyle(element).fontFamily") != "Times New Roman"
+    assert card.bounding_box()["width"] > 280
     page.screenshot(path=str(folder/"01-login.png"))
+    page.set_viewport_size({"width":390,"height":844})
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 2")
+    assert page.get_by_role("heading",name="Acessar Service Desk").is_visible()
+    page.screenshot(path=str(folder/"01-login-mobile.png"))
+    page.set_viewport_size({"width":1280,"height":900})
     page.get_by_label("E-mail").fill("browser.qa@infodive.test")
     page.get_by_label("Senha").fill("Disposable-Only-QA-Password-2026")
     page.get_by_role("button",name="Entrar").click()

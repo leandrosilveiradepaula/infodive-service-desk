@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { AppShell } from "../components/navigation/app-shell";
 import { AuthenticationProvider, type AuthenticatedProfile, type UserRole } from "../ui/authentication/auth-context";
 import { loadVerifiedSession } from "../authentication/load-session";
+import loginStyles from "../styles/login.module.css";
 
 const allowedRoles = new Set<string>(["tenant_administrator","service_manager","service_agent","requester","customer_administrator","customer_user"]);
 function toProfile(value: Awaited<ReturnType<typeof loadVerifiedSession>>["profile"]): AuthenticatedProfile | null {
@@ -49,19 +50,69 @@ function LoginForm({ onAuthenticated }: { onAuthenticated: () => void }) {
       setError(reason instanceof Error ? reason.message : "Falha de autenticação.");
     } finally { setBusy(false); }
   }
-  return <form onSubmit={event => { void submit(event); }}>
-    <h2>Acessar Service Desk</h2>
-    <label>E-mail <input type="email" autoComplete="username" required value={email}
-      onChange={event => setEmail(event.target.value)} /></label>
-    <label>Senha <input type="password" autoComplete="current-password" required value={password}
-      onChange={event => setPassword(event.target.value)} /></label>
-    {tenants.length > 1 && <label>Empresa <select required value={tenantId}
-      onChange={event => setTenantId(event.target.value)}><option value="">Selecione uma empresa</option>
-      {tenants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-    </select></label>}
-    <button type="submit" disabled={busy}>{busy ? "Entrando..." : "Entrar"}</button>
-    {error && <p role="alert">{error}</p>}
-  </form>;
+  return <div className={loginStyles.layout} data-testid="login-layout">
+    <aside className={loginStyles.brandPanel} aria-label="Infodive Service Desk">
+      <div className={loginStyles.brandLockup}>
+        <span className={loginStyles.brandMark} aria-hidden="true">i</span>
+        <div className={loginStyles.brandName}>
+          <strong>infodive</strong>
+          <span>Service Desk</span>
+        </div>
+      </div>
+      <div className={loginStyles.brandCopy}>
+        <p className={loginStyles.brandEyebrow}>PORTAL DE ATENDIMENTO</p>
+        <h1>Mais clareza para cada solicitação.</h1>
+        <p>Um lugar para abrir chamados, acompanhar o atendimento e manter sua equipe informada.</p>
+      </div>
+      <div className={loginStyles.brandFooter}>
+        <span className={loginStyles.brandFooterDot} aria-hidden="true"></span>
+        Atendimento organizado, em um só lugar.
+      </div>
+    </aside>
+
+    <section className={loginStyles.formPanel} aria-labelledby="login-title">
+      <div className={loginStyles.mobileBrand}>
+        <span className={loginStyles.mobileMark} aria-hidden="true">i</span>
+        <strong>infodive <span>Service Desk</span></strong>
+      </div>
+      <div className={loginStyles.formContents} data-testid="login-card">
+        <p className={loginStyles.formEyebrow}>BEM-VINDO</p>
+        <h2 id="login-title" className={loginStyles.title}>Acessar Service Desk</h2>
+        <p className={loginStyles.subtitle}>Entre com seus dados para acessar o portal de atendimento da sua empresa.</p>
+
+        <form className={loginStyles.form} onSubmit={event => { void submit(event); }}
+          aria-label="Acessar Service Desk">
+          <div className={loginStyles.field}>
+            <label htmlFor="service-desk-email">E-mail</label>
+            <input id="service-desk-email" type="email" autoComplete="username"
+              inputMode="email" placeholder="nome@empresa.com.br" required
+              value={email} disabled={busy}
+              onChange={event => setEmail(event.target.value)} />
+          </div>
+          <div className={loginStyles.field}>
+            <label htmlFor="service-desk-password">Senha</label>
+            <input id="service-desk-password" type="password" autoComplete="current-password"
+              placeholder="Digite sua senha" required value={password} disabled={busy}
+              onChange={event => setPassword(event.target.value)} />
+          </div>
+          {tenants.length > 1 && <div className={loginStyles.field}>
+            <label htmlFor="service-desk-tenant">Empresa</label>
+            <select id="service-desk-tenant" required value={tenantId} disabled={busy}
+              onChange={event => setTenantId(event.target.value)}>
+              <option value="">Selecione uma empresa</option>
+              {tenants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </div>}
+          {error && <p className={loginStyles.error} role="alert">{error}</p>}
+          <button className={loginStyles.submit} type="submit" disabled={busy}>
+            {busy ? "Entrando..." : "Entrar"}
+            {!busy && <span aria-hidden="true">→</span>}
+          </button>
+        </form>
+        <p className={loginStyles.helpText}>Acesso exclusivo para usuários autorizados.</p>
+      </div>
+    </section>
+  </div>;
 }
 function LogoutButton({ onLogout }: { onLogout: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -212,8 +263,11 @@ function Application() {
     const timer = window.setInterval(() => { void renew(); }, 25 * 60 * 1000);
     return () => { active = false; window.clearInterval(timer); };
   }, [profile]);
-  if (loading) return <main><p>Verificando sessão...</p></main>;
-  if (profile === null) return <main className="loginPage">
+  if (loading) return <main className={loginStyles.loadingPage} role="status" aria-live="polite">
+    <span className={loginStyles.loadingMark} aria-hidden="true">i</span>
+    <p>Verificando sessão...</p>
+  </main>;
+  if (profile === null) return <main className={loginStyles.page}>
     <LoginForm onAuthenticated={() => { setLoading(true); setRevision(value => value + 1); }} />
   </main>;
   const signOut = async () => {
