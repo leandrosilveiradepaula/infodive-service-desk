@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { serveStaticWeb } from "./static-web";
 import { createRequestSessionDependencies } from "./session-adapters";
 import { createSupabaseIdentityProvider } from "./supabase-identity";
@@ -22,12 +22,12 @@ export interface AuthApiConfig {
   readonly publicOrigin: string;
   readonly webRoot?: string;
 }
-export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch = fetch) {
+export function createAuthApiHandler(config: AuthApiConfig, request: typeof fetch = fetch) {
   if (!config.publicOrigin.startsWith("https://") || config.tenantSigningKey.length < 32)
     throw Error("Invalid auth API configuration");
   const identity = createSupabaseIdentityProvider(config.supabaseUrl, config.anonKey, extractAccessToken, request);
   const memberships = createSupabaseMembershipRepository(config.supabaseUrl, config.secretKey, request);
-  return createServer(async (incoming, response) => {
+  return async (incoming: IncomingMessage, response: ServerResponse) => {
     const headers = {
       cookie: incoming.headers.cookie,
       origin: incoming.headers.origin,
@@ -196,5 +196,10 @@ export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch
       if (!result) { send(404, { error: "not_found" }); return; }
       send(result.status, result.body, result.headers);
     } catch { send(503, { ok: false }); }
-  });
+  };
+}
+
+/** Both the persistent Node server and serverless functions use the same API logic. */
+export function createAuthApiServer(config: AuthApiConfig, request: typeof fetch = fetch) {
+  return createServer(createAuthApiHandler(config, request));
 }
