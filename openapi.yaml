@@ -1,0 +1,126 @@
+openapi: 3.1.0
+info:
+  title: Infodive Service Desk Public API
+  version: 1.0.0
+  description: Versioned service-to-service API. End-user authentication is intentionally separate from this API.
+servers:
+  - url: https://api.infodive.example
+paths:
+  /v1/tickets:
+    post:
+      operationId: createTicket
+      summary: Create a ticket through a service integration
+      security:
+        - serviceOAuth:
+            - tickets:write
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTicketRequest'
+      responses:
+        '201':
+          description: Ticket created or the result of the original idempotent request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+webhooks:
+  ticketChanged:
+    post:
+      summary: Delivered asynchronously after a ticket change; destination failures never block ticket operations.
+      parameters:
+        - name: X-Webhook-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: HMAC-SHA256 signature formatted as `sha256=<hex>` over the raw request body.
+        - name: X-Webhook-Id
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookEnvelope'
+components:
+  securitySchemes:
+    serviceOAuth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://identity.infodive.example/oauth/token
+          scopes:
+            tickets:write: Create tickets through an integration.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+  responses:
+    Problem:
+      description: A consistent API problem response.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    CreateTicketRequest:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 240
+        description:
+          type: string
+          maxLength: 10000
+    Ticket:
+      type: object
+      required: [id, tenantId, title]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        title: { type: string }
+    WebhookEnvelope:
+      type: object
+      required: [id, type, tenantId, correlationId, occurredAt, data]
+      properties:
+        id: { type: string }
+        type: { type: string, example: ticket.changed }
+        tenantId: { type: string }
+        correlationId: { type: string }
+        occurredAt: { type: string, format: date-time }
+        data: { type: object }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        fields:
+          type: object
+          additionalProperties: { type: string }
