@@ -44,6 +44,16 @@ const defaultTransitions: Readonly<Record<TicketStatus, readonly TicketStatus[]>
   reopened: ["open", "in_progress", "waiting_customer", "waiting_third_party", "resolved", "closed"]
 };
 
+const ticketRelationshipTypes: readonly TicketRelationshipType[] = [
+  "relates_to",
+  "blocks",
+  "blocked_by",
+  "duplicates",
+  "duplicated_by",
+  "parent_of",
+  "child_of"
+];
+
 /** Evaluates a status transition using tenant-configured rules when supplied. */
 export function canTransitionTicket(
   currentStatus: TicketStatus,
@@ -90,7 +100,7 @@ export function canReadTicketComment(
   return context.canReadTicket;
 }
 
-/** Ensures linked tickets cannot cross tenant boundaries or point to themselves. */
+/** Ensures linked tickets cannot cross tenant boundaries, point to themselves, or use an invalid relationship type. */
 export function assertTicketRelationship(
   source: TicketReference,
   target: TicketReference,
@@ -104,5 +114,8 @@ export function assertTicketRelationship(
   }
   if (relationshipType.trim().length === 0) {
     throw new Error("A relationship type is required.");
+  }
+  if (!ticketRelationshipTypes.includes(relationshipType)) {
+    throw new Error("Invalid ticket relationship type.");
   }
 }
