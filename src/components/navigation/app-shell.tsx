@@ -92,6 +92,7 @@ export interface AppShellProps {
   readonly pageTitle: string;
   readonly currentPath?: string;
   readonly navigation?: readonly NavigationItem[];
+  readonly onNavigate?: (path: string) => void;
 }
 
 /**
@@ -102,7 +103,8 @@ export function AppShell({
   children,
   pageTitle,
   currentPath,
-  navigation = defaultNavigation
+  navigation = defaultNavigation,
+  onNavigate
 }: AppShellProps) {
   const { isAuthenticated, profile, hasAnyRole, signOut } = useAuthentication();
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -177,6 +179,13 @@ export function AppShell({
                 <li key={item.href}>
                   <a
                     href={item.href}
+                    onClick={event => {
+                      if (onNavigate && !event.ctrlKey && !event.metaKey &&
+                          !event.altKey && !event.shiftKey) {
+                        event.preventDefault();
+                        onNavigate(item.href);
+                      }
+                    }}
                     aria-current={currentPath === item.href ? "page" : undefined}
                     title={item.description}
                   >

@@ -1,0 +1,43 @@
+name: Service Desk verification
+on:
+  push:
+    branches: ["main", "quality/**", "security/**", "fix/**"]
+  pull_request:
+    branches: ["main"]
+permissions:
+  contents: read
+concurrency:
+  group: service-desk-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  runner-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify hosted runner availability without actions or dependencies
+        run: echo HOSTED_RUNNER_STARTED
+  verify:
+    needs: runner-preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+      - name: Require committed dependency lockfile (fail closed)
+        shell: bash
+        run: |
+          if [ ! -f package-lock.json ]; then
+            echo "::warning title=Dependency lockfile missing::Bootstrap data follows; CI will remain failed until package-lock.json is committed."
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            echo LOCKFILE_JSON_BEGIN
+            cat package-lock.json
+            echo LOCKFILE_JSON_END
+            echo "::error title=Dependency lockfile missing::Commit package-lock.json; do not treat bootstrapped installs as verified CI."
+            exit 1
+          fi
+      - name: Verify pinned install and real TS/TSX/build/tests
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run ci

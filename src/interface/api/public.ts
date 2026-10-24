@@ -137,7 +137,7 @@ function validateCreateTicketInput(body: unknown): { readonly value: CreatePubli
   if (title.length < 3 || title.length > 240) fields.title = "Title must contain between 3 and 240 characters.";
   if (description === null || (description !== undefined && description.length > 10_000)) fields.description = "Description must be a string of at most 10000 characters.";
   if (Object.keys(fields).length > 0) return { problem: problem("validation_failed", "Request validation failed.", 422, fields) };
-  return { value: description === undefined ? { title } : { title, description } };
+  return { value: typeof description === "string" ? { title, description } : { title } };
 }
 
 function validateIdempotencyKey(key: string | undefined): string | null {

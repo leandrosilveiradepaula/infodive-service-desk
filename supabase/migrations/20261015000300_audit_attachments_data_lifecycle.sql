@@ -368,3 +368,6 @@ create policy attachment_storage_upload on storage.objects for insert to authent
   with check (public.can_upload_attachment_object(bucket_id, name, metadata));
 create policy attachment_storage_delete on storage.objects for delete to authenticated
   using (public.can_access_attachment_object(bucket_id, name, 'manage'));
+
+-- Privileged trigger/provisioning implementations are internal, not browser RPC.
+revoke all on function public.provision_data_governance_settings() from public, anon, authenticated;
