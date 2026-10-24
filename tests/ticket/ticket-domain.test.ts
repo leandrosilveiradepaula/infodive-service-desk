@@ -5,7 +5,8 @@ import {
   assertTicketRelationship,
   assertTicketTransition,
   canReadTicketComment,
-  canTransitionTicket
+  canTransitionTicket,
+  type TicketRelationshipType
 } from "../../src/domain/ticket";
 
 test("uses the default ticket lifecycle transitions", () => {
@@ -67,11 +68,40 @@ test("rejects self and cross-tenant ticket relationships", () => {
       "relates_to"
     )
   );
-  assert.doesNotThrow(() =>
-    assertTicketRelationship(
-      { id: "ticket-1", tenantId: "tenant-a" },
-      { id: "ticket-2", tenantId: "tenant-a" },
-      "blocks"
-    )
+});
+
+test("rejects invalid ticket relationship types received at runtime", () => {
+  const runtimeRelationshipType: string = "not_a_relationship";
+
+  assert.throws(
+    () =>
+      assertTicketRelationship(
+        { id: "ticket-1", tenantId: "tenant-a" },
+        { id: "ticket-2", tenantId: "tenant-a" },
+        runtimeRelationshipType as TicketRelationshipType
+      ),
+    /Invalid ticket relationship type\./
   );
+});
+
+test("accepts every valid ticket relationship type for distinct tenant tickets", () => {
+  const relationshipTypes: readonly TicketRelationshipType[] = [
+    "relates_to",
+    "blocks",
+    "blocked_by",
+    "duplicates",
+    "duplicated_by",
+    "parent_of",
+    "child_of"
+  ];
+
+  for (const relationshipType of relationshipTypes) {
+    assert.doesNotThrow(() =>
+      assertTicketRelationship(
+        { id: "ticket-1", tenantId: "tenant-a" },
+        { id: "ticket-2", tenantId: "tenant-a" },
+        relationshipType
+      )
+    );
+  }
 });
