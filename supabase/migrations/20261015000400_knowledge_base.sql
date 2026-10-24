@@ -15,7 +15,8 @@ create table public.knowledge_collections (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint knowledge_collections_name_not_blank check (char_length(trim(name)) between 2 and 120),
-  constraint knowledge_collections_tenant_name_key unique (tenant_id, name)
+  constraint knowledge_collections_tenant_name_key unique (tenant_id, name),
+  constraint knowledge_collections_id_tenant_key unique (id, tenant_id)
 );
 
 create index knowledge_collections_tenant_id_idx on public.knowledge_collections (tenant_id);
@@ -23,13 +24,15 @@ create index knowledge_collections_tenant_id_idx on public.knowledge_collections
 create table public.knowledge_categories (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
-  collection_id uuid not null references public.knowledge_collections(id) on delete cascade,
+  collection_id uuid not null,
   name text not null,
   description text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint knowledge_categories_name_not_blank check (char_length(trim(name)) between 2 and 120),
-  constraint knowledge_categories_collection_name_key unique (collection_id, name)
+  constraint knowledge_categories_collection_name_key unique (collection_id, name),
+  constraint knowledge_categories_collection_tenant_fk foreign key (collection_id, tenant_id)
+    references public.knowledge_collections(id, tenant_id) on delete cascade
 );
 
 create index knowledge_categories_tenant_collection_idx on public.knowledge_categories (tenant_id, collection_id);
@@ -263,7 +266,9 @@ declare
   article_tenant_id uuid;
 begin
   select tenant_id into article_tenant_id from public.knowledge_articles where id = new.article_id;
-  if article_tenant_id is distinct from new.tenant_id then
+  if article_tenant_id is distinct from new.tenant_id
+     or not exists (select 1 from public.tickets ticket
+                    where ticket.id = new.ticket_id and ticket.tenant_id = new.tenant_id) then
     raise exception 'Knowledge article and ticket association must have the same tenant';
   end if;
   return new;
@@ -383,3 +388,8 @@ create policy knowledge_article_ratings_update_own on public.knowledge_article_r
   with check (user_id = auth.uid() and public.can_read_knowledge_article(article_id));
 create policy knowledge_article_ratings_delete_own on public.knowledge_article_ratings for delete
   using (user_id = auth.uid());
+
+-- Privileged trigger/provisioning implementations are internal, not browser RPC.
+revoke all on function public.validate_knowledge_collection_scope() from public, anon, authenticated;
+revoke all on function public.snapshot_knowledge_article_version() from public, anon, authenticated;
+revoke all on function public.validate_knowledge_ticket_article_scope() from public, anon, authenticated;

@@ -241,8 +241,8 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (select 1 from public.users where id = new.requester_user_id and tenant_id = new.tenant_id) then
-    raise exception 'Ticket requester must belong to the ticket tenant';
+  if not exists (select 1 from public.memberships where user_id = new.requester_user_id and tenant_id = new.tenant_id and status = 'active') then
+    raise exception 'Ticket requester must have active membership in the ticket tenant';
   end if;
   if new.client_company_id is not null and not exists (select 1 from public.client_companies where id = new.client_company_id and tenant_id = new.tenant_id) then
     raise exception 'Ticket client company must belong to the ticket tenant';
@@ -259,8 +259,8 @@ begin
   if new.team_id is not null and not exists (select 1 from public.ticket_teams where id = new.team_id and tenant_id = new.tenant_id) then
     raise exception 'Ticket team must belong to the ticket tenant';
   end if;
-  if new.assignee_user_id is not null and not exists (select 1 from public.users where id = new.assignee_user_id and tenant_id = new.tenant_id) then
-    raise exception 'Ticket assignee must belong to the ticket tenant';
+  if new.assignee_user_id is not null and not exists (select 1 from public.memberships where user_id = new.assignee_user_id and tenant_id = new.tenant_id and status = 'active') then
+    raise exception 'Ticket assignee must have active membership in the ticket tenant';
   end if;
   return new;
 end;
@@ -379,7 +379,8 @@ set search_path = public
 as $$
 begin
   if not exists (select 1 from public.tickets where id = new.ticket_id and tenant_id = new.tenant_id)
-     or not exists (select 1 from public.attachments where id = new.attachment_id and tenant_id = new.tenant_id and resource_type = 'ticket') then
+     or not exists (select 1 from public.attachments where id = new.attachment_id and tenant_id = new.tenant_id
+          and resource_type = 'ticket' and resource_id = new.ticket_id) then
     raise exception 'Ticket attachments must be ticket resources in the same tenant';
   end if;
   return new;
@@ -404,7 +405,8 @@ returns boolean language sql stable security definer set search_path = public, a
   select exists (
     select 1 from public.tickets ticket
     where ticket.id = target_ticket_id and (
-      public.has_tenant_permission(ticket.tenant_id, 'ticket', 'read')
+      (ticket.requester_user_id = auth.uid() and public.is_active_tenant_member(ticket.tenant_id))
+      or public.has_tenant_permission(ticket.tenant_id, 'ticket', 'read')
       or public.has_tenant_permission(ticket.tenant_id, 'ticket', 'manage')
       or (ticket.client_company_id is not null and public.has_delegated_company_permission(ticket.tenant_id, ticket.client_company_id, 'ticket', 'read'))
       or (ticket.client_company_id is not null and public.has_delegated_company_permission(ticket.tenant_id, ticket.client_company_id, 'ticket', 'manage'))
@@ -434,6 +436,11 @@ alter table public.ticket_teams enable row level security;
 alter table public.ticket_status_definitions enable row level security;
 alter table public.ticket_transition_rules enable row level security;
 alter table public.tickets enable row level security;
+-- The Data API needs table privileges in addition to RLS. Every row is still
+-- checked by the owner/member policies below; anon has no ticket privileges.
+revoke all on public.tickets from anon;
+grant usage on schema public to authenticated;
+grant select, insert on public.tickets to authenticated;
 alter table public.ticket_comments enable row level security;
 alter table public.ticket_events enable row level security;
 alter table public.ticket_transfers enable row level security;
@@ -453,8 +460,11 @@ create policy ticket_statuses_manage on public.ticket_status_definitions for all
 create policy ticket_transitions_read on public.ticket_transition_rules for select using (public.is_active_tenant_member(tenant_id));
 create policy ticket_transitions_manage on public.ticket_transition_rules for all using (public.has_tenant_permission(tenant_id, 'ticket', 'manage')) with check (public.has_tenant_permission(tenant_id, 'ticket', 'manage'));
 
-create policy tickets_read on public.tickets for select using (public.can_read_ticket(id));
-create policy tickets_insert on public.tickets for insert with check (requester_user_id = auth.uid() and public.has_tenant_permission(tenant_id, 'ticket', 'manage'));
+create policy tickets_read on public.tickets for select to authenticated
+  using ((requester_user_id = (select auth.uid()) and public.is_active_tenant_member(tenant_id))
+         or public.can_read_ticket(id));
+create policy tickets_insert on public.tickets for insert to authenticated
+  with check (requester_user_id = (select auth.uid()) and public.is_active_tenant_member(tenant_id));
 create policy tickets_update on public.tickets for update using (public.can_manage_ticket(id)) with check (public.has_tenant_permission(tenant_id, 'ticket', 'manage'));
 create policy ticket_comments_read on public.ticket_comments for select using (public.can_read_ticket(ticket_id) and (visibility = 'public' or public.can_manage_ticket(ticket_id)));
 create policy ticket_comments_insert on public.ticket_comments for insert with check (author_user_id = auth.uid() and public.can_read_ticket(ticket_id) and (visibility = 'public' or public.can_manage_ticket(ticket_id)));
@@ -468,3 +478,14 @@ create policy ticket_relationships_delete on public.ticket_relationships for del
 create policy ticket_attachments_read on public.ticket_attachments for select using (public.can_read_ticket(ticket_id) and (visibility = 'public' or public.can_manage_ticket(ticket_id)));
 create policy ticket_attachments_insert on public.ticket_attachments for insert with check (attached_by_user_id = auth.uid() and public.can_manage_ticket(ticket_id));
 create policy ticket_attachments_delete on public.ticket_attachments for delete using (public.can_manage_ticket(ticket_id));
+
+-- Privileged trigger/provisioning implementations are internal, not browser RPC.
+revoke all on function public.provision_ticket_statuses(uuid) from public, anon, authenticated;
+revoke all on function public.provision_ticket_statuses_for_tenant() from public, anon, authenticated;
+revoke all on function public.validate_ticket_scope() from public, anon, authenticated;
+revoke all on function public.assign_ticket_protocol_and_validate_state() from public, anon, authenticated;
+revoke all on function public.validate_ticket_status_transition() from public, anon, authenticated;
+revoke all on function public.record_ticket_history() from public, anon, authenticated;
+revoke all on function public.validate_ticket_child_scope() from public, anon, authenticated;
+revoke all on function public.validate_ticket_relationship_scope() from public, anon, authenticated;
+revoke all on function public.validate_ticket_attachment_scope() from public, anon, authenticated;

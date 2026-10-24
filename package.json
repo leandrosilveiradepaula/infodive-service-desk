@@ -2,12 +2,30 @@
   "name": "infodive-service-desk",
   "version": "0.1.0",
   "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.14.0"
+  },
   "scripts": {
-    "build": "tsc --project tsconfig.json",
-    "test": "npm run build && node --test dist/tests"
+    "build:server": "tsc --project tsconfig.json",
+    "typecheck:server": "tsc --project tsconfig.json --noEmit",
+    "typecheck:web": "tsc --project tsconfig.web.json --noEmit",
+    "typecheck": "npm run typecheck:server && npm run typecheck:web",
+    "build:web": "vite build && node scripts/verify-web-build.mjs",
+    "build": "npm run build:server && npm run typecheck:web && npm run build:web",
+    "test": "npm run build:server && cd dist && node --test",
+    "ci": "npm run typecheck && npm test && npm run build:web"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "@types/node": "22.12.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "5.9.3",
+    "vite": "8.2.2"
   }
 }

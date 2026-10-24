@@ -132,6 +132,31 @@ create table public.delegated_access_audit_log (
 create index delegated_access_audit_tenant_occurred_idx
   on public.delegated_access_audit_log (tenant_id, occurred_at desc);
 
+-- Fail-closed cross-tenant referential integrity, including privileged writes.
+alter table public.organizations add constraint organizations_id_tenant_key unique (id, tenant_id);
+alter table public.roles add constraint roles_id_tenant_key unique (id, tenant_id);
+alter table public.client_companies add constraint client_companies_id_tenant_key unique (id, tenant_id);
+alter table public.operational_links add constraint operational_links_scope_key unique (id, tenant_id, client_company_id, platform_user_id);
+alter table public.delegated_access_grants add constraint delegated_access_grants_scope_key unique (id, tenant_id, client_company_id, platform_user_id);
+alter table public.users add constraint users_org_tenant_fk
+  foreign key (organization_id, tenant_id) references public.organizations (id, tenant_id) on delete set null (organization_id);
+alter table public.memberships add constraint memberships_role_tenant_fk
+  foreign key (role_id, tenant_id) references public.roles (id, tenant_id) on delete restrict;
+alter table public.memberships add constraint memberships_org_tenant_fk
+  foreign key (organization_id, tenant_id) references public.organizations (id, tenant_id) on delete set null (organization_id);
+alter table public.client_companies add constraint client_companies_org_tenant_fk
+  foreign key (organization_id, tenant_id) references public.organizations (id, tenant_id) on delete set null (organization_id);
+alter table public.operational_links add constraint operational_links_company_tenant_fk
+  foreign key (client_company_id, tenant_id) references public.client_companies (id, tenant_id) on delete cascade;
+alter table public.delegated_access_grants add constraint delegated_access_link_scope_fk
+  foreign key (operational_link_id, tenant_id, client_company_id, platform_user_id) references public.operational_links (id, tenant_id, client_company_id, platform_user_id) on delete restrict;
+alter table public.delegated_access_grants add constraint delegated_access_role_tenant_fk
+  foreign key (role_id, tenant_id) references public.roles (id, tenant_id) on delete restrict;
+alter table public.delegated_access_grants add constraint delegated_access_company_tenant_fk
+  foreign key (client_company_id, tenant_id) references public.client_companies (id, tenant_id) on delete cascade;
+alter table public.delegated_access_audit_log add constraint delegated_access_audit_scope_fk
+  foreign key (delegated_access_grant_id, tenant_id, client_company_id, actor_user_id) references public.delegated_access_grants (id, tenant_id, client_company_id, platform_user_id) on delete restrict;
+
 -- The six initial profiles are templates only. Effective access always comes from
 -- permission assignments, so tenants may add or change roles without code changes.
 insert into public.permissions (resource, action, description) values
@@ -244,7 +269,7 @@ begin
   select * into link_record from public.operational_links where id = new.operational_link_id;
   select tenant_id into role_tenant_id from public.roles where id = new.role_id;
 
-  if not found or not link_record.active or link_record.revoked_at is not null
+  if link_record.id is null or not link_record.active or link_record.revoked_at is not null
     or link_record.tenant_id <> new.tenant_id
     or link_record.client_company_id <> new.client_company_id
     or link_record.platform_user_id <> new.platform_user_id
@@ -263,6 +288,7 @@ for each row execute function public.validate_delegated_access_grant();
 revoke all on function public.is_active_tenant_member(uuid) from public;
 revoke all on function public.has_tenant_permission(uuid, text, text) from public;
 revoke all on function public.has_delegated_company_permission(uuid, uuid, text, text) from public;
+revoke all on function public.validate_delegated_access_grant() from public, anon, authenticated;
 grant execute on function public.is_active_tenant_member(uuid) to authenticated;
 grant execute on function public.has_tenant_permission(uuid, text, text) to authenticated;
 grant execute on function public.has_delegated_company_permission(uuid, uuid, text, text) to authenticated;
@@ -344,17 +370,7 @@ create policy delegated_access_grants_manage on public.delegated_access_grants f
 
 create policy delegated_access_audit_select on public.delegated_access_audit_log for select
   using (public.has_tenant_permission(tenant_id, 'delegated_access', 'manage'));
-create policy delegated_access_audit_insert on public.delegated_access_audit_log for insert
-  with check (
-    actor_user_id = auth.uid()
-    and exists (
-      select 1 from public.delegated_access_grants grant_access
-      where grant_access.id = delegated_access_grant_id
-        and grant_access.tenant_id = tenant_id
-        and grant_access.client_company_id = client_company_id
-        and grant_access.platform_user_id = actor_user_id
-        and grant_access.enabled
-        and grant_access.revoked_at is null
-        and (grant_access.expires_at is null or grant_access.expires_at > now())
-    )
-  );
+-- Delegated audit trails must originate in authorized server-side code.
+-- Never allow arbitrary authenticated clients to fabricate successful actions
+-- by submitting a grant ID and self-declared event payload over the Data API.
+-- No INSERT policy: privileged server writes are audited out of band.
